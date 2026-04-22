@@ -1,0 +1,6 @@
+name = "taxigo-bot"
+main = "api/webhook.ts"
+compatibility_date = "2023-12-01"
+
+[vars]
+MINI_APP_URL = "https://your-vercel-app.vercel.app"

@@ -42,18 +42,19 @@ export default async function handler(request: Request) {
 
     // نقاط نهاية Webhooks الخاصة بـ Supabase
     if (path === '/api/webhook/new-ride') {
-        return handleNewRideWebhook(request, bot, supabase, MINI_APP_URL);
+        return handleWebhook(request, bot, supabase, MINI_APP_URL, 'new-ride');
     }
     if (path === '/api/webhook/new-user') {
-        return handleNewUserWebhook(request, bot, supabase, MINI_APP_URL);
+        return handleWebhook(request, bot, supabase, MINI_APP_URL, 'new-user');
     }
     if (path === '/api/webhook/ride-update') {
-        return handleRideUpdateWebhook(request, bot, supabase, MINI_APP_URL);
+        return handleWebhook(request, bot, supabase, MINI_APP_URL, 'ride-update');
     }
 
     // معالجة تحديثات تيليجرام (Webhook)
     try {
-        const body = await request.json();
+        const bodyText = await request.text();
+        const body = JSON.parse(bodyText);
         await bot.handleUpdate(body);
         return new Response('OK', { status: 200 });
     } catch (e) {
@@ -62,44 +63,44 @@ export default async function handler(request: Request) {
     }
 }
 
-// ========== دوال Webhook المساعدة ==========
-async function handleNewRideWebhook(req: Request, bot: Bot, supabase: any, MINI_APP_URL: string) {
+async function handleWebhook(req: Request, bot: Bot, supabase: any, MINI_APP_URL: string, type: string) {
     try {
-        const payload: any = await req.json(); const ride = payload.record;
-        if (!ride || ride.status !== 'pending') return new Response('Ignored', { status: 200 });
-        const { data: drivers } = await supabase.from('profiles').select('telegram_id, latitude, longitude').eq('role', 'driver').eq('approval_status', 'approved').eq('is_online', true);
-        if (!drivers?.length) return new Response('No drivers', { status: 200 });
-        const nearby = drivers.map((d: any) => ({ ...d, distance: getDistance(ride.pickup_lat, ride.pickup_lng, d.latitude, d.longitude) })).filter((d: any) => d.distance < 10).sort((a: any, b: any) => a.distance - b.distance).slice(0, 5);
-        const msg = `🚕 طلب جديد!\nالالتقاط: ${ride.pickup_address}\nالتوصيل: ${ride.dropoff_address}\nالأجرة: $${ride.fare}\nالمسافة: ${nearby[0]?.distance?.toFixed(1)} كم`;
-        for (const d of nearby) { try { await bot.api.sendMessage(d.telegram_id, msg, { reply_markup: { inline_keyboard: [[{ text: '📱 فتح', web_app: { url: `${MINI_APP_URL}/driver` } }]] } }); } catch {} }
-        return new Response(`Notified ${nearby.length} drivers`, { status: 200 });
-    } catch (e) { return new Response('Error', { status: 500 }); }
-}
-
-async function handleNewUserWebhook(req: Request, bot: Bot, supabase: any, MINI_APP_URL: string) {
-    try {
-        const payload: any = await req.json(); const user = payload.record;
-        if (!user || user.approval_status !== 'pending') return new Response('Ignored', { status: 200 });
-        const { data: admin } = await supabase.from('app_settings').select('value').eq('key', 'admin_telegram_id').single();
-        if (!admin?.value) return new Response('No admin', { status: 200 });
-        await bot.api.sendMessage(admin.value, `🆕 ${user.role === 'driver' ? 'سائق' : 'زبون'} جديد!\n${user.first_name} ${user.last_name}\n${user.phone}`, { reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] } });
-        return new Response('Admin notified', { status: 200 });
-    } catch (e) { return new Response('Error', { status: 500 }); }
-}
-
-async function handleRideUpdateWebhook(req: Request, bot: Bot, supabase: any, MINI_APP_URL: string) {
-    try {
-        const payload: any = await req.json(); const oldR = payload.old_record, newR = payload.record;
-        if (!oldR || !newR || oldR.status === newR.status) return new Response('No change', { status: 200 });
-        if (oldR.status === 'pending' && newR.status === 'accepted') {
-            const { data: driver } = await supabase.from('profiles').select('first_name, last_name, phone, rating').eq('id', newR.driver_id).single();
-            const { data: cust } = await supabase.from('profiles').select('telegram_id').eq('id', newR.customer_id).single();
-            if (driver && cust) await bot.api.sendMessage(cust.telegram_id, `✅ تم قبول رحلتك!\nالسائق: ${driver.first_name} ${driver.last_name}\nالتقييم: ${driver.rating || '5.0'}\nالهاتف: ${driver.phone || 'غير متوفر'}`, { reply_markup: { inline_keyboard: [[{ text: '📍 تتبع', web_app: { url: `${MINI_APP_URL}/ride/${newR.id}` } }]] } });
+        const bodyText = await req.text();
+        const payload = JSON.parse(bodyText);
+        
+        if (type === 'new-ride') {
+            const ride = payload.record;
+            if (!ride || ride.status !== 'pending') return new Response('Ignored', { status: 200 });
+            const { data: drivers } = await supabase.from('profiles').select('telegram_id, latitude, longitude').eq('role', 'driver').eq('approval_status', 'approved').eq('is_online', true);
+            if (!drivers?.length) return new Response('No drivers', { status: 200 });
+            const nearby = drivers.map((d: any) => ({ ...d, distance: getDistance(ride.pickup_lat, ride.pickup_lng, d.latitude, d.longitude) })).filter((d: any) => d.distance < 10).sort((a: any, b: any) => a.distance - b.distance).slice(0, 5);
+            const msg = `🚕 طلب جديد!\nالالتقاط: ${ride.pickup_address}\nالتوصيل: ${ride.dropoff_address}\nالأجرة: $${ride.fare}\nالمسافة: ${nearby[0]?.distance?.toFixed(1)} كم`;
+            for (const d of nearby) { try { await bot.api.sendMessage(d.telegram_id, msg, { reply_markup: { inline_keyboard: [[{ text: '📱 فتح', web_app: { url: `${MINI_APP_URL}/driver` } }]] } }); } catch {} }
+            return new Response(`Notified ${nearby.length} drivers`, { status: 200 });
+        } else if (type === 'new-user') {
+            const user = payload.record;
+            if (!user || user.approval_status !== 'pending') return new Response('Ignored', { status: 200 });
+            const { data: admin } = await supabase.from('app_settings').select('value').eq('key', 'admin_telegram_id').single();
+            if (!admin?.value) return new Response('No admin', { status: 200 });
+            await bot.api.sendMessage(admin.value, `🆕 ${user.role === 'driver' ? 'سائق' : 'زبون'} جديد!\n${user.first_name} ${user.last_name}\n${user.phone}`, { reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] } });
+            return new Response('Admin notified', { status: 200 });
+        } else if (type === 'ride-update') {
+            const oldR = payload.old_record, newR = payload.record;
+            if (!oldR || !newR || oldR.status === newR.status) return new Response('No change', { status: 200 });
+            if (oldR.status === 'pending' && newR.status === 'accepted') {
+                const { data: driver } = await supabase.from('profiles').select('first_name, last_name, phone, rating').eq('id', newR.driver_id).single();
+                const { data: cust } = await supabase.from('profiles').select('telegram_id').eq('id', newR.customer_id).single();
+                if (driver && cust) await bot.api.sendMessage(cust.telegram_id, `✅ تم قبول رحلتك!\nالسائق: ${driver.first_name} ${driver.last_name}\nالتقييم: ${driver.rating || '5.0'}\nالهاتف: ${driver.phone || 'غير متوفر'}`, { reply_markup: { inline_keyboard: [[{ text: '📍 تتبع', web_app: { url: `${MINI_APP_URL}/ride/${newR.id}` } }]] } });
+            }
+            if (oldR.status === 'accepted' && newR.status === 'picked_up') { const { data: cust } = await supabase.from('profiles').select('telegram_id').eq('id', newR.customer_id).single(); if (cust) await bot.api.sendMessage(cust.telegram_id, `🚗 السائق وصل إلى موقع الالتقاط.`); }
+            if (newR.status === 'cancelled') { const uid = newR.customer_id === oldR.customer_id ? newR.driver_id : newR.customer_id; if (uid) { const { data: u } = await supabase.from('profiles').select('telegram_id').eq('id', uid).single(); if (u) await bot.api.sendMessage(u.telegram_id, `❌ تم إلغاء الرحلة.`); } }
+            return new Response('Notified', { status: 200 });
         }
-        if (oldR.status === 'accepted' && newR.status === 'picked_up') { const { data: cust } = await supabase.from('profiles').select('telegram_id').eq('id', newR.customer_id).single(); if (cust) await bot.api.sendMessage(cust.telegram_id, `🚗 السائق وصل إلى موقع الالتقاط.`); }
-        if (newR.status === 'cancelled') { const uid = newR.customer_id === oldR.customer_id ? newR.driver_id : newR.customer_id; if (uid) { const { data: u } = await supabase.from('profiles').select('telegram_id').eq('id', uid).single(); if (u) await bot.api.sendMessage(u.telegram_id, `❌ تم إلغاء الرحلة.`); } }
-        return new Response('Notified', { status: 200 });
-    } catch (e) { return new Response('Error', { status: 500 }); }
+        return new Response('Unknown type', { status: 400 });
+    } catch (e) {
+        console.error('Webhook error:', e);
+        return new Response('Error', { status: 500 });
+    }
 }
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number { 

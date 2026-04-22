@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight, ChevronLeft, Car, MapPin, CreditCard } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 
-export default function OnboardingPage() {
+interface OnboardingPageProps {
+  onFinish?: () => void
+}
+
+export default function OnboardingPage({ onFinish }: OnboardingPageProps) {
     const { t, dir } = useLanguage()
     const [currentSlide, setCurrentSlide] = useState(0)
     const navigate = useNavigate()
@@ -15,9 +19,15 @@ export default function OnboardingPage() {
     ]
 
     const nextSlide = () => {
-        if (currentSlide < slides.length - 1) setCurrentSlide(currentSlide + 1)
-        else navigate('/choose-role')
+        if (currentSlide < slides.length - 1) {
+            setCurrentSlide(currentSlide + 1)
+        } else {
+            // إنهاء الـ onboarding
+            if (onFinish) onFinish()
+            navigate('/choose-role')
+        }
     }
+
     const prevSlide = () => { if (currentSlide > 0) setCurrentSlide(currentSlide - 1) }
     const slide = slides[currentSlide]
     const ChevronIcon = dir === 'rtl' ? ChevronLeft : ChevronRight

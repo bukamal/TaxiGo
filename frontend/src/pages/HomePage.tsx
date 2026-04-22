@@ -3,9 +3,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { LatLngTuple, Icon } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useNavigate } from 'react-router-dom'
-import { useTelegram } from '../context/TelegramContext'
-import { useAppStore } from '../store/useAppStore'
-import { createSupabaseClient } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import { calculateFare } from '../lib/utils'
 import haversine from 'haversine-distance'
 import { MapPin, Navigation, Car, Loader2 } from 'lucide-react'
@@ -18,11 +17,9 @@ let DefaultIcon = new Icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25
 function ChangeView({ center }: { center: LatLngTuple }) { const map = useMap(); map.setView(center, 14); return null }
 
 export default function HomePage() {
-    const { user: tgUser } = useTelegram()
-    const { profile } = useAppStore()
+    const { user, profile } = useAuth()
     const navigate = useNavigate()
     const { t } = useLanguage()
-    const supabase = createSupabaseClient(tgUser?.id)
     const [userLocation, setUserLocation] = useState<LatLngTuple>([24.7136, 46.6753])
     const [pickup, setPickup] = useState('')
     const [dropoff, setDropoff] = useState('')
@@ -36,19 +33,19 @@ export default function HomePage() {
         navigator.geolocation?.getCurrentPosition(pos => { const loc: LatLngTuple = [pos.coords.latitude, pos.coords.longitude]; setUserLocation(loc); if(!pickupCoords) { setPickupCoords(loc); setPickup('موقعي الحالي') } })
     }, [])
     useEffect(() => {
-        if(!tgUser||!profile) return
-        supabase.from('rides').select('*').eq('customer_id', profile.id).in('status', ['pending','accepted','picked_up','in_progress']).limit(1).maybeSingle().then(({data}) => data && setActiveRide(data))
-        const channel = supabase.channel('rides').on('postgres_changes', { event:'*', schema:'public', table:'rides', filter:`customer_id=eq.${profile.id}` }, payload => payload.new && setActiveRide(payload.new)).subscribe()
+        if(!user||!profile) return
+        supabase.from('rides').select('*').eq('customer_id', user.id).in('status', ['pending','accepted','picked_up','in_progress']).limit(1).maybeSingle().then(({data}) => data && setActiveRide(data))
+        const channel = supabase.channel('rides').on('postgres_changes', { event:'*', schema:'public', table:'rides', filter:`customer_id=eq.${user.id}` }, payload => payload.new && setActiveRide(payload.new)).subscribe()
         return () => { supabase.removeChannel(channel) }
-    }, [tgUser, profile])
+    }, [user, profile])
 
     const handlePickupSelect = (lat:number, lng:number, addr:string) => { setPickupCoords([lat,lng]); setPickup(addr); setUserLocation([lat,lng]) }
     const handleDropoffSelect = (lat:number, lng:number, addr:string) => { setDropoffCoords([lat,lng]); setDropoff(addr) }
 
     const handleRequest = async () => {
-        if(!profile||!pickupCoords||!dropoffCoords) return; setLoading(true)
+        if(!user||!pickupCoords||!dropoffCoords) return; setLoading(true)
         const dist = haversine({lat:pickupCoords[0],lng:pickupCoords[1]}, {lat:dropoffCoords[0],lng:dropoffCoords[1]})/1000
-        const { data } = await supabase.from('rides').insert({ customer_id:profile.id, pickup_lat:pickupCoords[0], pickup_lng:pickupCoords[1], dropoff_lat:dropoffCoords[0], dropoff_lng:dropoffCoords[1], pickup_address:pickup, dropoff_address:dropoff, status:'pending', fare:calculateFare(dist), distance_km:dist }).select().single()
+        const { data } = await supabase.from('rides').insert({ customer_id:user.id, pickup_lat:pickupCoords[0], pickup_lng:pickupCoords[1], dropoff_lat:dropoffCoords[0], dropoff_lng:dropoffCoords[1], pickup_address:pickup, dropoff_address:dropoff, status:'pending', fare:calculateFare(dist), distance_km:dist }).select().single()
         setLoading(false); if(data) { setActiveRide(data); navigate(`/ride/${data.id}`) }
     }
 

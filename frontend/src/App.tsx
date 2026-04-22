@@ -1,11 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAppStore } from './store/useAppStore'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { ThemeProvider } from './context/ThemeContext'
-import { useEffect, useState } from 'react'
-
 import Layout from './components/Layout'
 import OnboardingPage from './pages/OnboardingPage'
+import AuthPage from './pages/AuthPage'
 import RoleSelectionPage from './pages/RoleSelectionPage'
 import CustomerSignupPage from './pages/CustomerSignupPage'
 import DriverSignupPage from './pages/DriverSignupPage'
@@ -19,80 +18,53 @@ import DriverVehiclePage from './pages/DriverVehiclePage'
 
 const ONBOARDING_KEY = 'taxigo_onboarding_completed'
 
-// مستخدم وهمي للتجربة السريعة (سيتم استبداله بالبيانات الحقيقية لاحقاً)
-const MOCK_USER = {
-  id: 'mock-id',
-  telegram_id: 123456789,
-  first_name: 'مستخدم',
-  last_name: 'تجريبي',
-  username: 'test',
-  phone: '0500000000',
-  role: 'customer', // غيّر إلى 'driver' لتجربة وضع السائق
-  approval_status: 'approved',
-  is_online: true,
-  rating: 5.0,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString()
-}
+function AppRoutes() {
+    const { user, profile, loading } = useAuth()
+    const hasSeenOnboarding = localStorage.getItem(ONBOARDING_KEY) === 'true'
 
-function AppContent() {
-  const { profile, setProfile } = useAppStore()
-  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
-    setHasSeenOnboarding(seen)
-    if (!profile) {
-      setProfile(MOCK_USER)
+    if (loading) {
+        return <div className="h-screen flex items-center justify-center">جاري التحميل...</div>
     }
-  }, [])
 
-  const handleOnboardingFinish = () => {
-    localStorage.setItem(ONBOARDING_KEY, 'true')
-    setHasSeenOnboarding(true)
-  }
+    return (
+        <BrowserRouter>
+            <Routes>
+                <Route path="/onboarding" element={<OnboardingPage />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/choose-role" element={<RoleSelectionPage />} />
+                <Route path="/signup/customer" element={<CustomerSignupPage />} />
+                <Route path="/signup/driver" element={<DriverSignupPage />} />
+                <Route path="/pending" element={<PendingApprovalPage />} />
 
-  if (hasSeenOnboarding === null) {
-    return null
-  }
-
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/onboarding" element={<OnboardingPage onFinish={handleOnboardingFinish} />} />
-        <Route path="/choose-role" element={<RoleSelectionPage />} />
-        <Route path="/signup/customer" element={<CustomerSignupPage />} />
-        <Route path="/signup/driver" element={<DriverSignupPage />} />
-        <Route path="/pending" element={<PendingApprovalPage />} />
-
-        <Route path="/" element={<Layout />}>
-          <Route index element={
-            !hasSeenOnboarding ? <Navigate to="/onboarding" replace /> :
-            profile?.approval_status === 'approved' ? (
-              profile.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />
-            ) : (
-              <Navigate to="/choose-role" replace />
-            )
-          } />
-          <Route path="ride/:id" element={<RidePage />} />
-          <Route path="driver" element={<DriverDashboard />} />
-          <Route path="driver/vehicle" element={<DriverVehiclePage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="admin" element={<AdminPage />} />
-        </Route>
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  )
+                <Route path="/" element={<Layout />}>
+                    <Route index element={
+                        !hasSeenOnboarding ? <Navigate to="/onboarding" replace /> :
+                        !user ? <Navigate to="/auth" replace /> :
+                        !profile ? <Navigate to="/choose-role" replace /> :
+                        profile.approval_status === 'pending' ? <Navigate to="/pending" replace /> :
+                        profile.role === 'driver' ? <Navigate to="/driver" replace /> :
+                        <HomePage />
+                    } />
+                    <Route path="ride/:id" element={<RidePage />} />
+                    <Route path="driver" element={<DriverDashboard />} />
+                    <Route path="driver/vehicle" element={<DriverVehiclePage />} />
+                    <Route path="profile" element={<ProfilePage />} />
+                    <Route path="admin" element={<AdminPage />} />
+                </Route>
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </BrowserRouter>
+    )
 }
 
 export default function App() {
-  return (
-    <LanguageProvider>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
-    </LanguageProvider>
-  )
+    return (
+        <LanguageProvider>
+            <ThemeProvider>
+                <AuthProvider>
+                    <AppRoutes />
+                </AuthProvider>
+            </ThemeProvider>
+        </LanguageProvider>
+    )
 }

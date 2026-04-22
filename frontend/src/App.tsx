@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store/useAppStore'
 import { LanguageProvider } from './context/LanguageContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { useEffect, useState } from 'react'
 
 import Layout from './components/Layout'
 import OnboardingPage from './pages/OnboardingPage'
@@ -19,7 +19,7 @@ import DriverVehiclePage from './pages/DriverVehiclePage'
 
 const ONBOARDING_KEY = 'taxigo_onboarding_completed'
 
-// مستخدم وهمي للسماح بالتجربة السريعة
+// مستخدم وهمي للتجربة السريعة (سيتم استبداله بالبيانات الحقيقية لاحقاً)
 const MOCK_USER = {
   id: 'mock-id',
   telegram_id: 123456789,
@@ -36,49 +36,60 @@ const MOCK_USER = {
 }
 
 function AppContent() {
-  const { setProfile, profile } = useAppStore()
+  const { profile, setProfile } = useAppStore()
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
 
   useEffect(() => {
+    // تحميل حالة Onboarding من localStorage
     const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
     setHasSeenOnboarding(seen)
-    // ضبط المستخدم الوهمي في المتجر (يمكن استبداله بجلب حقيقي لاحقاً)
+
+    // ضبط المستخدم الوهمي للتجربة (إذا لم يكن هناك مستخدم حقيقي)
     if (!profile) {
       setProfile(MOCK_USER)
     }
   }, [])
 
-  const completeOnboarding = () => {
+  // دالة تُستدعى عند انتهاء Onboarding
+  const handleOnboardingFinish = () => {
     localStorage.setItem(ONBOARDING_KEY, 'true')
     setHasSeenOnboarding(true)
   }
 
+  // أثناء تحميل حالة localStorage، لا نعرض شيئًا (جزء من الثانية)
   if (hasSeenOnboarding === null) {
-    return <div className="h-screen flex items-center justify-center">جاري التحميل...</div>
+    return null // أو شاشة فارغة، لن يلاحظها المستخدم
   }
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/onboarding" element={<OnboardingPage onFinish={completeOnboarding} />} />
+        {/* مسارات عامة متاحة دائمًا */}
+        <Route path="/onboarding" element={<OnboardingPage onFinish={handleOnboardingFinish} />} />
         <Route path="/choose-role" element={<RoleSelectionPage />} />
         <Route path="/signup/customer" element={<CustomerSignupPage />} />
         <Route path="/signup/driver" element={<DriverSignupPage />} />
         <Route path="/pending" element={<PendingApprovalPage />} />
 
-        {!hasSeenOnboarding ? (
-          <Route path="*" element={<Navigate to="/onboarding" replace />} />
-        ) : (
-          <Route path="/" element={<Layout />}>
-            <Route index element={MOCK_USER.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
-            <Route path="ride/:id" element={<RidePage />} />
-            <Route path="driver" element={<DriverDashboard />} />
-            <Route path="driver/vehicle" element={<DriverVehiclePage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="admin" element={<AdminPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        )}
+        {/* مسارات التطبيق الرئيسية (بعد Onboarding) */}
+        <Route path="/" element={<Layout />}>
+          <Route index element={
+            !hasSeenOnboarding ? <Navigate to="/onboarding" replace /> :
+            profile?.approval_status === 'approved' ? (
+              profile.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />
+            ) : (
+              <Navigate to="/choose-role" replace />
+            )
+          } />
+          <Route path="ride/:id" element={<RidePage />} />
+          <Route path="driver" element={<DriverDashboard />} />
+          <Route path="driver/vehicle" element={<DriverVehiclePage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="admin" element={<AdminPage />} />
+        </Route>
+
+        {/* أي مسار غير معروف يذهب إلى الجذر */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

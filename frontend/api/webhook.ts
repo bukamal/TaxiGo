@@ -38,17 +38,26 @@ export default async function handler(request: Request) {
         path = match ? match[1] : '/';
     }
 
+    // قراءة الجسم بطريقة هجينة (محاولة text() أولاً، ثم body)
     let rawBody: string;
     try {
-        if (request.body) {
+        if (typeof request.text === 'function') {
+            rawBody = await request.text();
+        } else if (request.body) {
             const response = new Response(request.body);
             rawBody = await response.text();
         } else {
             rawBody = '{}';
         }
     } catch (e) {
-        console.error('Failed to read body:', e);
+        console.error('Body read error:', e);
         return new Response('Bad request', { status: 400 });
+    }
+
+    // تصحيح المشكلة الشائعة: إذا كان body هو "[object Object]"
+    if (rawBody === '[object Object]') {
+        console.warn('Received "[object Object]", attempting to parse as empty');
+        rawBody = '{}';
     }
 
     if (path === '/api/webhook/new-ride') return handleWebhook(rawBody, bot, supabase, MINI_APP_URL, 'new-ride');
@@ -60,7 +69,7 @@ export default async function handler(request: Request) {
         await bot.handleUpdate(body);
         return new Response('OK', { status: 200 });
     } catch (e) {
-        console.error('Bot error:', e);
+        console.error('Bot error:', e, 'Raw body:', rawBody);
         return new Response('Error', { status: 500 });
     }
 }

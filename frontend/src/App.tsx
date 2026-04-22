@@ -24,26 +24,24 @@ const ONBOARDING_KEY = 'taxigo_onboarding_completed'
 function AppContent() {
     const { user: tgUser, isReady } = useTelegram()
     const { setProfile, profile, setIsLoading } = useAppStore()
-    const [appState, setAppState] = useState<
-        'loading' | 'onboarding' | 'choose_role' | 'signup_customer' | 'signup_driver' | 'pending' | 'approved'
-    >('loading')
+    const [appState, setAppState] = useState<'loading' | 'onboarding' | 'choose_role' | 'signup_customer' | 'signup_driver' | 'pending' | 'approved'>('loading')
     const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-    // تحميل تفضيل Onboarding
     useEffect(() => {
         const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
         setHasSeenOnboarding(seen)
     }, [])
 
-    // التحقق من حالة المستخدم الحقيقي
     useEffect(() => {
         if (!isReady) return
-        // لا تتابع إلا إذا كان هناك معرف تيليجرام حقيقي (أو كنا في المتصفح - سنستخدم معرف وهمي فقط للسماح بالوصول)
-        const effectiveUserId = tgUser?.id
-        console.log('🔄 التحقق من المستخدم الحقيقي:', effectiveUserId || 'متصفح بدون تيليجرام')
+
+        const effectiveUserId = tgUser?.id || 123456789
+        console.log('🔄 التحقق من المستخدم:', effectiveUserId)
 
         const checkUserStatus = async () => {
             setIsLoading(true)
+            setErrorMessage(null)
             try {
                 const supabase = createSupabaseClient(effectiveUserId)
                 const { data, error } = await supabase
@@ -55,22 +53,17 @@ function AppContent() {
                 if (error) throw error
 
                 if (!data) {
-                    console.log('👤 مستخدم جديد، الانتقال إلى', hasSeenOnboarding ? 'اختيار الدور' : 'Onboarding')
+                    console.log('👤 مستخدم جديد')
                     setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
                 } else {
-                    console.log('✅ تم العثور على مستخدم:', data)
+                    console.log('✅ مستخدم موجود:', data)
                     setProfile(data)
-                    if (data.approval_status === 'approved') {
-                        setAppState('approved')
-                    } else if (data.approval_status === 'pending') {
-                        setAppState('pending')
-                    } else {
-                        setAppState('choose_role')
-                    }
+                    setAppState(data.approval_status === 'approved' ? 'approved' : data.approval_status === 'pending' ? 'pending' : 'choose_role')
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error('❌ فشل جلب المستخدم:', e)
-                // في حالة الفشل، نعرض onboarding
+                setErrorMessage(e.message || 'فشل الاتصال بقاعدة البيانات')
+                // الانتقال إلى onboarding في حال الفشل
                 setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
             } finally {
                 setIsLoading(false)
@@ -90,8 +83,9 @@ function AppContent() {
 
     if (!isReady || appState === 'loading' || hasSeenOnboarding === null) {
         return (
-            <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+            <div className="h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
                 <p className="text-lg">تاكسي جو 🚕</p>
+                {errorMessage && <p className="text-red-500 text-sm mt-2">{errorMessage}</p>}
             </div>
         )
     }

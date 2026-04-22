@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased dark:bg-gray-900 dark:text-gray-100;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    overscroll-behavior: none;
+  }
+  [dir="rtl"] { text-align: right; }
+  [dir="rtl"] .left-3 { left: auto; right: 0.75rem; }
+  [dir="rtl"] .left-4 { left: auto; right: 1rem; }
+  [dir="rtl"] .pl-10 { padding-left: 0; padding-right: 2.5rem; }
+  [dir="rtl"] .pr-4 { padding-right: 0; padding-left: 1rem; }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}

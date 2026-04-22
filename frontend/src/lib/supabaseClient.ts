@@ -1,12 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Database } from './database.types'
 
-// استخدام مفتاح الخدمة (Service Role Key) للتجربة - تحذير: غير آمن للإنتاج!
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing Supabase environment variables (Service Key required for testing)')
+    throw new Error('Missing Supabase environment variables. Ensure VITE_SUPABASE_SERVICE_KEY is set in Vercel (not Sensitive).')
 }
 
 const customFetch = (telegramId?: number) => {
@@ -31,4 +30,3 @@ export const createSupabaseClient = (telegramId?: number): SupabaseClient<Databa
 export const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
 
 export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
-export type Enums<T extends keyof Database['public']['Enums']> = Database['public']['Enums'][T]

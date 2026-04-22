@@ -36,9 +36,8 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
             setUser(app.initDataUnsafe?.user)
             setIsReady(true)
         } else {
-            // دعم المتصفح العادي: نعتبر التطبيق جاهزاً بدون مستخدم تيليجرام
-            console.log('⚠️ Telegram WebApp not detected, using browser mode')
-            setIsReady(true)
+            console.log('⚠️ Telegram WebApp not detected, using browser mode (no user)')
+            setIsReady(true) // جاهز ولكن بدون مستخدم
         }
     }, [])
 

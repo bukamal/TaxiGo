@@ -14,7 +14,6 @@ export default async function handler(request: Request) {
     const bot = new Bot(BOT_TOKEN);
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // تعريف أوامر البوت
     bot.command('start', async (c) => {
         const user = c.from; if (!user) return;
         const { data: profile } = await supabase.from('profiles').select('approval_status, role').eq('telegram_id', user.id).maybeSingle();
@@ -40,32 +39,20 @@ export default async function handler(request: Request) {
         path = match ? match[1] : '/';
     }
 
-    // قراءة الجسم مرة واحدة فقط
+    // قراءة الجسم بطريقة متوافقة مع Vercel
     let rawBody: string;
     try {
-        rawBody = await request.text();
+        const arrayBuffer = await request.arrayBuffer();
+        rawBody = Buffer.from(arrayBuffer).toString('utf-8');
     } catch (e) {
-        // إذا فشل request.text()، نحاول استخدام body مباشرة (قد يكون ReadableStream)
-        const reader = request.body?.getReader();
-        if (reader) {
-            const chunks: Uint8Array[] = [];
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-            }
-            rawBody = Buffer.concat(chunks).toString('utf-8');
-        } else {
-            return new Response('Unable to read request body', { status: 400 });
-        }
+        console.error('Failed to read body:', e);
+        return new Response('Bad request', { status: 400 });
     }
 
-    // نقاط نهاية Webhooks الخاصة بـ Supabase
     if (path === '/api/webhook/new-ride') return handleWebhook(rawBody, bot, supabase, MINI_APP_URL, 'new-ride');
     if (path === '/api/webhook/new-user') return handleWebhook(rawBody, bot, supabase, MINI_APP_URL, 'new-user');
     if (path === '/api/webhook/ride-update') return handleWebhook(rawBody, bot, supabase, MINI_APP_URL, 'ride-update');
 
-    // Webhook تيليجرام
     try {
         const body = JSON.parse(rawBody);
         await bot.handleUpdate(body);

@@ -1,8 +1,0 @@
-{
-  "name": "bot",
-  "private": true,
-  "version": "1.0.0",
-  "scripts": { "dev": "wrangler dev api/webhook.ts", "deploy": "wrangler deploy api/webhook.ts" },
-  "dependencies": { "grammy": "^1.19.0", "@supabase/supabase-js": "^2.38.0" },
-  "devDependencies": { "wrangler": "^3.0.0", "typescript": "^5.3.0" }
-}

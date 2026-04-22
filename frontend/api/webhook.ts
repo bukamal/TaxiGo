@@ -39,11 +39,17 @@ export default async function handler(request: Request) {
         path = match ? match[1] : '/';
     }
 
-    // قراءة الجسم بطريقة متوافقة مع Vercel
+    // قراءة الجسم بطريقة موثوقة عبر Response
     let rawBody: string;
     try {
-        const arrayBuffer = await request.arrayBuffer();
-        rawBody = Buffer.from(arrayBuffer).toString('utf-8');
+        // إذا كان request يحتوي على body، نستخدم Response لقراءته
+        if (request.body) {
+            const response = new Response(request.body);
+            rawBody = await response.text();
+        } else {
+            // بعض طلبات Vercel قد لا تحتوي على body (مثل GET)، نتعامل معها كجسم فارغ
+            rawBody = '{}';
+        }
     } catch (e) {
         console.error('Failed to read body:', e);
         return new Response('Bad request', { status: 400 });

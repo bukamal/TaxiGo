@@ -40,16 +40,34 @@ export default async function handler(request: Request) {
         path = match ? match[1] : '/';
     }
 
-    // Webhooks الخاصة بـ Supabase
-    if (path === '/api/webhook/new-ride') return handleWebhook(request, bot, supabase, MINI_APP_URL, 'new-ride');
-    if (path === '/api/webhook/new-user') return handleWebhook(request, bot, supabase, MINI_APP_URL, 'new-user');
-    if (path === '/api/webhook/ride-update') return handleWebhook(request, bot, supabase, MINI_APP_URL, 'ride-update');
+    // قراءة الجسم مرة واحدة فقط
+    let rawBody: string;
+    try {
+        rawBody = await request.text();
+    } catch (e) {
+        // إذا فشل request.text()، نحاول استخدام body مباشرة (قد يكون ReadableStream)
+        const reader = request.body?.getReader();
+        if (reader) {
+            const chunks: Uint8Array[] = [];
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+            }
+            rawBody = Buffer.concat(chunks).toString('utf-8');
+        } else {
+            return new Response('Unable to read request body', { status: 400 });
+        }
+    }
+
+    // نقاط نهاية Webhooks الخاصة بـ Supabase
+    if (path === '/api/webhook/new-ride') return handleWebhook(rawBody, bot, supabase, MINI_APP_URL, 'new-ride');
+    if (path === '/api/webhook/new-user') return handleWebhook(rawBody, bot, supabase, MINI_APP_URL, 'new-user');
+    if (path === '/api/webhook/ride-update') return handleWebhook(rawBody, bot, supabase, MINI_APP_URL, 'ride-update');
 
     // Webhook تيليجرام
     try {
-        // استخدام clone لتجنب استهلاك الجسم
-        const bodyText = await request.clone().text();
-        const body = JSON.parse(bodyText);
+        const body = JSON.parse(rawBody);
         await bot.handleUpdate(body);
         return new Response('OK', { status: 200 });
     } catch (e) {
@@ -58,10 +76,9 @@ export default async function handler(request: Request) {
     }
 }
 
-async function handleWebhook(req: Request, bot: Bot, supabase: any, MINI_APP_URL: string, type: string) {
+async function handleWebhook(rawBody: string, bot: Bot, supabase: any, MINI_APP_URL: string, type: string) {
     try {
-        const bodyText = await req.clone().text();
-        const payload = JSON.parse(bodyText);
+        const payload = JSON.parse(rawBody);
         
         if (type === 'new-ride') {
             const ride = payload.record;

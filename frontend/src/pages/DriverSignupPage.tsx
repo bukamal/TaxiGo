@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTelegram } from '../context/TelegramContext'
 import { createSupabaseClient } from '../lib/supabaseClient'
 import { useLanguage } from '../context/LanguageContext'
-import { User, Phone, Car, FileText, Camera, ArrowLeft, Loader2, X } from 'lucide-react'
+import { User, Phone, FileText, Camera, ArrowLeft, Loader2, X } from 'lucide-react'
 
 export default function DriverSignupPage() {
     const { user: tgUser } = useTelegram()

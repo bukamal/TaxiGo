@@ -29,7 +29,6 @@ export default async function handler(request: Request) {
         await c.reply('لوحة الإدارة داخل التطبيق.', { reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] } });
     });
 
-    // استخراج المسار
     let path = '/';
     try {
         const url = new URL(request.url);
@@ -39,15 +38,12 @@ export default async function handler(request: Request) {
         path = match ? match[1] : '/';
     }
 
-    // قراءة الجسم بطريقة موثوقة عبر Response
     let rawBody: string;
     try {
-        // إذا كان request يحتوي على body، نستخدم Response لقراءته
         if (request.body) {
             const response = new Response(request.body);
             rawBody = await response.text();
         } else {
-            // بعض طلبات Vercel قد لا تحتوي على body (مثل GET)، نتعامل معها كجسم فارغ
             rawBody = '{}';
         }
     } catch (e) {
@@ -72,7 +68,6 @@ export default async function handler(request: Request) {
 async function handleWebhook(rawBody: string, bot: Bot, supabase: any, MINI_APP_URL: string, type: string) {
     try {
         const payload = JSON.parse(rawBody);
-        
         if (type === 'new-ride') {
             const ride = payload.record;
             if (!ride || ride.status !== 'pending') return new Response('Ignored', { status: 200 });

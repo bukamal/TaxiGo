@@ -1,8 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
-import { useAppStore } from './store/useAppStore'
-import { LanguageProvider } from './context/LanguageContext'
-import { ThemeProvider } from './context/ThemeContext'
 import { useEffect, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useTelegram } from './context/TelegramContext'
+import { useAppStore } from './store/useAppStore'
+import { createSupabaseClient } from './lib/supabaseClient'
+import { LanguageProvider } from './context/LanguageContext'
+import { ThemeProvider } from './context/ThemeProvider'
 
 import Layout from './components/Layout'
 import OnboardingPage from './pages/OnboardingPage'
@@ -17,48 +19,67 @@ import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
 import DriverVehiclePage from './pages/DriverVehiclePage'
 
-// --- إعدادات مؤقتة للتجربة ---
-// يمكنك تغيير هذه القيم لتجربة دور مختلف
-const MOCK_USER = {
-  id: 'test-user-123',
-  telegram_id: 123456789,
-  first_name: 'مستخدم',
-  last_name: 'تجريبي',
-  username: 'test_user',
-  phone: '0500000000',
-  role: 'customer', // غيّر إلى 'driver' لتجربة وضع السائق
-  approval_status: 'approved',
-  is_online: true,
-  rating: 5.0,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString()
-}
-
-// مفتاح تخزين حالة onboarding
 const ONBOARDING_KEY = 'taxigo_onboarding_completed'
 
-function AppRoutes() {
-  const { setProfile, setIsLoading } = useAppStore()
+function AppContent() {
+  const { user: tgUser, isReady } = useTelegram()
+  const { setProfile, profile, setIsLoading } = useAppStore()
+  const [appState, setAppState] = useState<'loading' | 'onboarding' | 'choose_role' | 'signup_customer' | 'signup_driver' | 'pending' | 'approved'>('loading')
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
 
   useEffect(() => {
-    // حقن المستخدم الوهمي في المتجر
-    setProfile(MOCK_USER)
-    setIsLoading(false)
-
-    // التحقق مما إذا كان المستخدم قد شاهد الـ onboarding مسبقاً
     const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
     setHasSeenOnboarding(seen)
   }, [])
 
-  // دالة لتمييز أن المستخدم أنهى الـ onboarding
+  useEffect(() => {
+    // استخدام معرف تيليجرام حقيقي أو معرف وهمي للتجربة
+    const effectiveUserId = tgUser?.id || 123456789
+    
+    if (!isReady) return
+
+    const checkUserStatus = async () => {
+      setIsLoading(true)
+      const supabase = createSupabaseClient(effectiveUserId)
+      
+      // محاولة جلب الملف الشخصي
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('telegram_id', effectiveUserId)
+        .maybeSingle()
+
+      if (error) {
+        console.error('Error fetching profile:', error)
+        setAppState('onboarding')
+      } else if (!data) {
+        // مستخدم جديد
+        setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
+      } else {
+        setProfile(data)
+        if (data.approval_status === 'approved') {
+          setAppState('approved')
+        } else if (data.approval_status === 'pending') {
+          setAppState('pending')
+        } else {
+          setAppState('choose_role')
+        }
+      }
+      setIsLoading(false)
+    }
+
+    if (hasSeenOnboarding !== null) {
+      checkUserStatus()
+    }
+  }, [tgUser, isReady, hasSeenOnboarding])
+
   const completeOnboarding = () => {
     localStorage.setItem(ONBOARDING_KEY, 'true')
     setHasSeenOnboarding(true)
+    setAppState('choose_role')
   }
 
-  // في حالة التحميل، لا تظهر أي شيء (أو شاشة تحميل بسيطة)
-  if (hasSeenOnboarding === null) {
+  if (!isReady || appState === 'loading' || hasSeenOnboarding === null) {
     return <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">جاري التحميل...</div>
   }
 
@@ -72,13 +93,15 @@ function AppRoutes() {
         <Route path="/signup/driver" element={<DriverSignupPage />} />
         <Route path="/pending" element={<PendingApprovalPage />} />
 
-        {/* التوجيه إلى Onboarding إذا لم يشاهده بعد */}
-        {!hasSeenOnboarding ? (
-          <Route path="*" element={<Navigate to="/onboarding" replace />} />
-        ) : (
-          // المسارات الرئيسية بعد Onboarding
+        {appState === 'onboarding' && <Route path="*" element={<Navigate to="/onboarding" replace />} />}
+        {appState === 'choose_role' && <Route path="*" element={<Navigate to="/choose-role" replace />} />}
+        {appState === 'signup_customer' && <Route path="*" element={<Navigate to="/signup/customer" replace />} />}
+        {appState === 'signup_driver' && <Route path="*" element={<Navigate to="/signup/driver" replace />} />}
+        {appState === 'pending' && <Route path="*" element={<Navigate to="/pending" replace />} />}
+        
+        {appState === 'approved' && (
           <Route path="/" element={<Layout />}>
-            <Route index element={MOCK_USER.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
+            <Route index element={profile?.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
             <Route path="ride/:id" element={<RidePage />} />
             <Route path="driver" element={<DriverDashboard />} />
             <Route path="driver/vehicle" element={<DriverVehiclePage />} />
@@ -96,7 +119,7 @@ export default function App() {
   return (
     <LanguageProvider>
       <ThemeProvider>
-        <AppRoutes />
+        <AppContent />
       </ThemeProvider>
     </LanguageProvider>
   )

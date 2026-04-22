@@ -33,8 +33,8 @@ function AppContent() {
   }, [])
 
   useEffect(() => {
-    // استخدام معرف تيليجرام حقيقي (أو 123456789 للتجربة خارج تيليجرام)
     const effectiveUserId = tgUser?.id || 123456789
+    console.log('🔄 التحقق من المستخدم:', effectiveUserId)
     
     if (!isReady) return
 
@@ -49,11 +49,13 @@ function AppContent() {
         .maybeSingle()
 
       if (error) {
-        console.error('Error fetching profile:', error)
+        console.error('❌ خطأ في جلب الملف الشخصي:', error)
         setAppState('onboarding')
       } else if (!data) {
+        console.log('👤 مستخدم جديد، الانتقال إلى', hasSeenOnboarding ? 'اختيار الدور' : 'Onboarding')
         setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
       } else {
+        console.log('✅ تم العثور على مستخدم:', data)
         setProfile(data)
         if (data.approval_status === 'approved') {
           setAppState('approved')

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useTelegram } from './context/TelegramContext'
 import { useAppStore } from './store/useAppStore'
-import { createSupabaseClient } from './lib/supabaseClient'
 import { LanguageProvider } from './context/LanguageContext'
 import { ThemeProvider } from './context/ThemeContext'
 
@@ -20,43 +19,19 @@ import AdminPage from './pages/AdminPage'
 import DriverVehiclePage from './pages/DriverVehiclePage'
 
 function AppContent() {
-  const { user: tgUser, isReady } = useTelegram()
-  const { setProfile, profile, setIsLoading } = useAppStore()
-  const [appState, setAppState] = useState<'loading'|'onboarding'|'choose_role'|'signup_customer'|'signup_driver'|'pending'|'approved'>('loading')
+  const { isReady } = useTelegram()
+  const { profile } = useAppStore()
+  const [appState, setAppState] = useState<'loading' | 'onboarding' | 'choose_role' | 'signup_customer' | 'signup_driver' | 'pending' | 'approved'>('loading')
 
   useEffect(() => {
-    // استخدام معرف تجريبي إذا لم نكن داخل تيليجرام (للتطوير فقط)
-    const effectiveUser = tgUser || { id: 123456789 };
-    
-    if (!isReady) return;
+    // حل مؤقت: تجاوز فحص قاعدة البيانات واعتبار المستخدم جديدًا دائمًا
+    // هذا يسمح لنا برؤية الواجهة وتجربة التسجيل
+    setTimeout(() => {
+      setAppState('onboarding');
+    }, 500);
+  }, [isReady]);
 
-    const checkUserStatus = async () => {
-      setIsLoading(true);
-      const supabase = createSupabaseClient(effectiveUser.id);
-      
-      const { data, error } = await supabase.rpc('get_my_profile', { _telegram_id: effectiveUser.id });
-      
-      if (error || !data || data.length === 0) {
-        setAppState('onboarding');
-      } else {
-        const userProfile = data[0];
-        setProfile(userProfile);
-        
-        if (userProfile.approval_status === 'approved') {
-          setAppState('approved');
-        } else if (userProfile.approval_status === 'pending') {
-          setAppState('pending');
-        } else {
-          setAppState('choose_role');
-        }
-      }
-      setIsLoading(false);
-    };
-
-    checkUserStatus();
-  }, [tgUser, isReady]);
-
-  if (!isReady || appState === 'loading') return <div className="h-screen flex items-center justify-center">جاري التحميل...</div>;
+  if (!isReady || appState === 'loading') return <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-lg">تاكسي جو 🚕</p></div>;
 
   return (
     <BrowserRouter>

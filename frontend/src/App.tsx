@@ -22,104 +22,126 @@ import DriverVehiclePage from './pages/DriverVehiclePage'
 const ONBOARDING_KEY = 'taxigo_onboarding_completed'
 
 function AppContent() {
-  const { user: tgUser, isReady } = useTelegram()
-  const { setProfile, profile, setIsLoading } = useAppStore()
-  const [appState, setAppState] = useState<'loading' | 'onboarding' | 'choose_role' | 'signup_customer' | 'signup_driver' | 'pending' | 'approved'>('loading')
-  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
+    const { user: tgUser, isReady } = useTelegram()
+    const { setProfile, profile, setIsLoading } = useAppStore()
+    const [appState, setAppState] = useState<
+        'loading' | 'onboarding' | 'choose_role' | 'signup_customer' | 'signup_driver' | 'pending' | 'approved'
+    >('loading')
+    const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
 
-  useEffect(() => {
-    const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
-    setHasSeenOnboarding(seen)
-  }, [])
+    // تحميل حالة Onboarding من localStorage
+    useEffect(() => {
+        const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
+        setHasSeenOnboarding(seen)
+    }, [])
 
-  useEffect(() => {
-    const effectiveUserId = tgUser?.id || 123456789
-    console.log('🔄 التحقق من المستخدم:', effectiveUserId)
-    
-    if (!isReady) return
+    // التحقق من حالة المستخدم بمجرد أن يصبح isReady = true
+    useEffect(() => {
+        // استخدام معرف تيليجرام حقيقي إذا وجد، وإلا معرف وهمي للتجربة (123456789)
+        const effectiveUserId = tgUser?.id || 123456789
+        console.log('🔄 التحقق من المستخدم:', effectiveUserId)
 
-    const checkUserStatus = async () => {
-      setIsLoading(true)
-      const supabase = createSupabaseClient(effectiveUserId)
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('telegram_id', effectiveUserId)
-        .maybeSingle()
+        if (!isReady) return
 
-      if (error) {
-        console.error('❌ خطأ في جلب الملف الشخصي:', error)
-        setAppState('onboarding')
-      } else if (!data) {
-        console.log('👤 مستخدم جديد، الانتقال إلى', hasSeenOnboarding ? 'اختيار الدور' : 'Onboarding')
-        setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
-      } else {
-        console.log('✅ تم العثور على مستخدم:', data)
-        setProfile(data)
-        if (data.approval_status === 'approved') {
-          setAppState('approved')
-        } else if (data.approval_status === 'pending') {
-          setAppState('pending')
-        } else {
-          setAppState('choose_role')
+        const checkUserStatus = async () => {
+            setIsLoading(true)
+            const supabase = createSupabaseClient(effectiveUserId)
+
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('telegram_id', effectiveUserId)
+                .maybeSingle()
+
+            if (error) {
+                console.error('❌ خطأ في جلب الملف الشخصي:', error)
+                setAppState('onboarding')
+            } else if (!data) {
+                console.log('👤 مستخدم جديد، الانتقال إلى', hasSeenOnboarding ? 'اختيار الدور' : 'Onboarding')
+                setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
+            } else {
+                console.log('✅ تم العثور على مستخدم:', data)
+                setProfile(data)
+                if (data.approval_status === 'approved') {
+                    setAppState('approved')
+                } else if (data.approval_status === 'pending') {
+                    setAppState('pending')
+                } else {
+                    setAppState('choose_role')
+                }
+            }
+            setIsLoading(false)
         }
-      }
-      setIsLoading(false)
+
+        if (hasSeenOnboarding !== null) {
+            checkUserStatus()
+        }
+    }, [tgUser, isReady, hasSeenOnboarding])
+
+    const completeOnboarding = () => {
+        localStorage.setItem(ONBOARDING_KEY, 'true')
+        setHasSeenOnboarding(true)
+        setAppState('choose_role')
     }
 
-    if (hasSeenOnboarding !== null) {
-      checkUserStatus()
+    // شاشة التحميل الأولية
+    if (!isReady || appState === 'loading' || hasSeenOnboarding === null) {
+        return (
+            <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+                <p className="text-lg">تاكسي جو 🚕</p>
+            </div>
+        )
     }
-  }, [tgUser, isReady, hasSeenOnboarding])
 
-  const completeOnboarding = () => {
-    localStorage.setItem(ONBOARDING_KEY, 'true')
-    setHasSeenOnboarding(true)
-    setAppState('choose_role')
-  }
+    return (
+        <BrowserRouter>
+            <Routes>
+                {/* مسارات Onboarding والاختيار */}
+                <Route path="/onboarding" element={<OnboardingPage onFinish={completeOnboarding} />} />
+                <Route path="/choose-role" element={<RoleSelectionPage />} />
+                <Route path="/signup/customer" element={<CustomerSignupPage />} />
+                <Route path="/signup/driver" element={<DriverSignupPage />} />
+                <Route path="/pending" element={<PendingApprovalPage />} />
 
-  if (!isReady || appState === 'loading' || hasSeenOnboarding === null) {
-    return <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">جاري التحميل...</div>
-  }
+                {/* إعادة التوجيه حسب حالة التطبيق */}
+                {appState === 'onboarding' && <Route path="*" element={<Navigate to="/onboarding" replace />} />}
+                {appState === 'choose_role' && <Route path="*" element={<Navigate to="/choose-role" replace />} />}
+                {appState === 'signup_customer' && <Route path="*" element={<Navigate to="/signup/customer" replace />} />}
+                {appState === 'signup_driver' && <Route path="*" element={<Navigate to="/signup/driver" replace />} />}
+                {appState === 'pending' && <Route path="*" element={<Navigate to="/pending" replace />} />}
 
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/onboarding" element={<OnboardingPage onFinish={completeOnboarding} />} />
-        <Route path="/choose-role" element={<RoleSelectionPage />} />
-        <Route path="/signup/customer" element={<CustomerSignupPage />} />
-        <Route path="/signup/driver" element={<DriverSignupPage />} />
-        <Route path="/pending" element={<PendingApprovalPage />} />
-
-        {appState === 'onboarding' && <Route path="*" element={<Navigate to="/onboarding" replace />} />}
-        {appState === 'choose_role' && <Route path="*" element={<Navigate to="/choose-role" replace />} />}
-        {appState === 'signup_customer' && <Route path="*" element={<Navigate to="/signup/customer" replace />} />}
-        {appState === 'signup_driver' && <Route path="*" element={<Navigate to="/signup/driver" replace />} />}
-        {appState === 'pending' && <Route path="*" element={<Navigate to="/pending" replace />} />}
-        
-        {appState === 'approved' && (
-          <Route path="/" element={<Layout />}>
-            <Route index element={profile?.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
-            <Route path="ride/:id" element={<RidePage />} />
-            <Route path="driver" element={<DriverDashboard />} />
-            <Route path="driver/vehicle" element={<DriverVehiclePage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="admin" element={<AdminPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        )}
-      </Routes>
-    </BrowserRouter>
-  )
+                {/* المسارات الرئيسية بعد الموافقة */}
+                {appState === 'approved' && (
+                    <Route path="/" element={<Layout />}>
+                        <Route
+                            index
+                            element={
+                                profile?.role === 'driver' ? (
+                                    <Navigate to="/driver" replace />
+                                ) : (
+                                    <HomePage />
+                                )
+                            }
+                        />
+                        <Route path="ride/:id" element={<RidePage />} />
+                        <Route path="driver" element={<DriverDashboard />} />
+                        <Route path="driver/vehicle" element={<DriverVehiclePage />} />
+                        <Route path="profile" element={<ProfilePage />} />
+                        <Route path="admin" element={<AdminPage />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Route>
+                )}
+            </Routes>
+        </BrowserRouter>
+    )
 }
 
 export default function App() {
-  return (
-    <LanguageProvider>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
-    </LanguageProvider>
-  )
+    return (
+        <LanguageProvider>
+            <ThemeProvider>
+                <AppContent />
+            </ThemeProvider>
+        </LanguageProvider>
+    )
 }

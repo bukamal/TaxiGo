@@ -14,13 +14,22 @@ export default async function handler(request: Request) {
     const bot = new Bot(BOT_TOKEN);
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    const url = new URL(request.url);
-    const path = url.pathname;
+    // استخراج المسار بشكل آمن في Vercel
+    let path = '/';
+    try {
+        const url = new URL(request.url);
+        path = url.pathname;
+    } catch {
+        // إذا فشل تحليل URL، استخدم الطريقة البديلة
+        const match = request.url.match(/^https?:\/\/[^\/]+(\/[^?]*)/);
+        path = match ? match[1] : '/';
+    }
 
     if (path === '/api/webhook/new-ride') return handleNewRideWebhook(request, bot, supabase, MINI_APP_URL);
     if (path === '/api/webhook/new-user') return handleNewUserWebhook(request, bot, supabase, MINI_APP_URL);
     if (path === '/api/webhook/ride-update') return handleRideUpdateWebhook(request, bot, supabase, MINI_APP_URL);
 
+    // أوامر البوت
     bot.command('start', async (c) => {
         const user = c.from; if (!user) return;
         const { data: profile } = await supabase.from('profiles').select('approval_status, role').eq('telegram_id', user.id).maybeSingle();

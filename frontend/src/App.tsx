@@ -1,13 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAppStore } from './store/useAppStore'
 import { LanguageProvider } from './context/LanguageContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { useEffect } from 'react'
 
 import Layout from './components/Layout'
-import OnboardingPage from './pages/OnboardingPage'
-import RoleSelectionPage from './pages/RoleSelectionPage'
-import CustomerSignupPage from './pages/CustomerSignupPage'
-import DriverSignupPage from './pages/DriverSignupPage'
-import PendingApprovalPage from './pages/PendingApprovalPage'
 import HomePage from './pages/HomePage'
 import DriverDashboard from './pages/DriverDashboard'
 import RidePage from './pages/RidePage'
@@ -15,25 +12,44 @@ import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
 import DriverVehiclePage from './pages/DriverVehiclePage'
 
+// --- إعدادات مؤقتة للتجربة ---
+// يمكنك تغيير هذه القيم لتجربة دور مختلف
+const MOCK_USER = {
+  id: 'test-user-123',
+  telegram_id: 123456789,
+  first_name: 'مستخدم',
+  last_name: 'تجريبي',
+  username: 'test_user',
+  phone: '0500000000',
+  role: 'customer', // غيّر إلى 'driver' لتجربة وضع السائق
+  approval_status: 'approved',
+  is_online: true,
+  rating: 5.0,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString()
+}
+
 function AppContent() {
-  // تجاوز كل المنطق: اعرض Onboarding مباشرة
+  const { setProfile, setIsLoading } = useAppStore()
+
+  useEffect(() => {
+    // حقن المستخدم الوهمي في المتجر
+    setProfile(MOCK_USER)
+    setIsLoading(false)
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route path="/choose-role" element={<RoleSelectionPage />} />
-        <Route path="/signup/customer" element={<CustomerSignupPage />} />
-        <Route path="/signup/driver" element={<DriverSignupPage />} />
-        <Route path="/pending" element={<PendingApprovalPage />} />
         <Route path="/" element={<Layout />}>
-          <Route index element={<HomePage />} />
+          <Route index element={MOCK_USER.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
           <Route path="ride/:id" element={<RidePage />} />
           <Route path="driver" element={<DriverDashboard />} />
           <Route path="driver/vehicle" element={<DriverVehiclePage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="admin" element={<AdminPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-        <Route path="*" element={<Navigate to="/onboarding" />} />
       </Routes>
     </BrowserRouter>
   )

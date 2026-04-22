@@ -22,7 +22,6 @@ export default function OnboardingPage({ onFinish }: OnboardingPageProps) {
         if (currentSlide < slides.length - 1) {
             setCurrentSlide(currentSlide + 1)
         } else {
-            // إنهاء الـ onboarding
             if (onFinish) onFinish()
             navigate('/choose-role')
         }

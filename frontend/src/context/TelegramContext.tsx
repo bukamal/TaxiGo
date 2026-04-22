@@ -7,7 +7,7 @@ const TelegramContext = createContext<TelegramContextType>({ tg: null, user: nul
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
     const [tg, setTg] = useState<any>(null)
     const [user, setUser] = useState<TelegramUser | null>(null)
-    const [isReady, setIsReady] = useState(true) // جاهز فوراً
+    const [isReady, setIsReady] = useState(true)
 
     useEffect(() => {
         const app = (window as any).Telegram?.WebApp

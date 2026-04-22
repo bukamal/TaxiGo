@@ -40,38 +40,31 @@ function AppContent() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
 
   useEffect(() => {
-    // تحميل حالة Onboarding من localStorage
     const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
     setHasSeenOnboarding(seen)
-
-    // ضبط المستخدم الوهمي للتجربة (إذا لم يكن هناك مستخدم حقيقي)
     if (!profile) {
       setProfile(MOCK_USER)
     }
   }, [])
 
-  // دالة تُستدعى عند انتهاء Onboarding
   const handleOnboardingFinish = () => {
     localStorage.setItem(ONBOARDING_KEY, 'true')
     setHasSeenOnboarding(true)
   }
 
-  // أثناء تحميل حالة localStorage، لا نعرض شيئًا (جزء من الثانية)
   if (hasSeenOnboarding === null) {
-    return null // أو شاشة فارغة، لن يلاحظها المستخدم
+    return null
   }
 
   return (
     <BrowserRouter>
       <Routes>
-        {/* مسارات عامة متاحة دائمًا */}
         <Route path="/onboarding" element={<OnboardingPage onFinish={handleOnboardingFinish} />} />
         <Route path="/choose-role" element={<RoleSelectionPage />} />
         <Route path="/signup/customer" element={<CustomerSignupPage />} />
         <Route path="/signup/driver" element={<DriverSignupPage />} />
         <Route path="/pending" element={<PendingApprovalPage />} />
 
-        {/* مسارات التطبيق الرئيسية (بعد Onboarding) */}
         <Route path="/" element={<Layout />}>
           <Route index element={
             !hasSeenOnboarding ? <Navigate to="/onboarding" replace /> :
@@ -88,7 +81,6 @@ function AppContent() {
           <Route path="admin" element={<AdminPage />} />
         </Route>
 
-        {/* أي مسار غير معروف يذهب إلى الجذر */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

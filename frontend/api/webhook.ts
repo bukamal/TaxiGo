@@ -38,7 +38,6 @@ export default async function handler(request: Request) {
         path = match ? match[1] : '/';
     }
 
-    // قراءة الجسم بطريقة هجينة (محاولة text() أولاً، ثم body)
     let rawBody: string;
     try {
         if (typeof request.text === 'function') {
@@ -54,9 +53,8 @@ export default async function handler(request: Request) {
         return new Response('Bad request', { status: 400 });
     }
 
-    // تصحيح المشكلة الشائعة: إذا كان body هو "[object Object]"
     if (rawBody === '[object Object]') {
-        console.warn('Received "[object Object]", attempting to parse as empty');
+        console.warn('Received "[object Object]", treating as empty');
         rawBody = '{}';
     }
 

@@ -4,7 +4,7 @@ import { useTelegram } from './context/TelegramContext'
 import { useAppStore } from './store/useAppStore'
 import { createSupabaseClient } from './lib/supabaseClient'
 import { LanguageProvider } from './context/LanguageContext'
-import { ThemeProvider } from './context/ThemeProvider'
+import { ThemeProvider } from './context/ThemeContext'
 
 import Layout from './components/Layout'
 import OnboardingPage from './pages/OnboardingPage'
@@ -33,7 +33,7 @@ function AppContent() {
   }, [])
 
   useEffect(() => {
-    // استخدام معرف تيليجرام حقيقي أو معرف وهمي للتجربة
+    // استخدام معرف تيليجرام حقيقي (أو 123456789 للتجربة خارج تيليجرام)
     const effectiveUserId = tgUser?.id || 123456789
     
     if (!isReady) return
@@ -42,7 +42,6 @@ function AppContent() {
       setIsLoading(true)
       const supabase = createSupabaseClient(effectiveUserId)
       
-      // محاولة جلب الملف الشخصي
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -53,7 +52,6 @@ function AppContent() {
         console.error('Error fetching profile:', error)
         setAppState('onboarding')
       } else if (!data) {
-        // مستخدم جديد
         setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
       } else {
         setProfile(data)
@@ -86,7 +84,6 @@ function AppContent() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* مسارات Onboarding والاختيار */}
         <Route path="/onboarding" element={<OnboardingPage onFinish={completeOnboarding} />} />
         <Route path="/choose-role" element={<RoleSelectionPage />} />
         <Route path="/signup/customer" element={<CustomerSignupPage />} />

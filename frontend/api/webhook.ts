@@ -1,4 +1,4 @@
-import { Bot, webhookCallback } from 'grammy';
+import { Bot } from 'grammy';
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(request: Request) {
@@ -14,22 +14,7 @@ export default async function handler(request: Request) {
     const bot = new Bot(BOT_TOKEN);
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // استخراج المسار بشكل آمن في Vercel
-    let path = '/';
-    try {
-        const url = new URL(request.url);
-        path = url.pathname;
-    } catch {
-        // إذا فشل تحليل URL، استخدم الطريقة البديلة
-        const match = request.url.match(/^https?:\/\/[^\/]+(\/[^?]*)/);
-        path = match ? match[1] : '/';
-    }
-
-    if (path === '/api/webhook/new-ride') return handleNewRideWebhook(request, bot, supabase, MINI_APP_URL);
-    if (path === '/api/webhook/new-user') return handleNewUserWebhook(request, bot, supabase, MINI_APP_URL);
-    if (path === '/api/webhook/ride-update') return handleRideUpdateWebhook(request, bot, supabase, MINI_APP_URL);
-
-    // أوامر البوت
+    // تعريف أوامر البوت
     bot.command('start', async (c) => {
         const user = c.from; if (!user) return;
         const { data: profile } = await supabase.from('profiles').select('approval_status, role').eq('telegram_id', user.id).maybeSingle();
@@ -45,10 +30,39 @@ export default async function handler(request: Request) {
         await c.reply('لوحة الإدارة داخل التطبيق.', { reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] } });
     });
 
-    const handleUpdate = webhookCallback(bot, 'http');
-    return handleUpdate(request);
+    // استخراج المسار بشكل آمن
+    let path = '/';
+    try {
+        const url = new URL(request.url);
+        path = url.pathname;
+    } catch {
+        const match = request.url.match(/^https?:\/\/[^\/]+(\/[^?]*)/);
+        path = match ? match[1] : '/';
+    }
+
+    // نقاط نهاية Webhooks الخاصة بـ Supabase
+    if (path === '/api/webhook/new-ride') {
+        return handleNewRideWebhook(request, bot, supabase, MINI_APP_URL);
+    }
+    if (path === '/api/webhook/new-user') {
+        return handleNewUserWebhook(request, bot, supabase, MINI_APP_URL);
+    }
+    if (path === '/api/webhook/ride-update') {
+        return handleRideUpdateWebhook(request, bot, supabase, MINI_APP_URL);
+    }
+
+    // معالجة تحديثات تيليجرام (Webhook)
+    try {
+        const body = await request.json();
+        await bot.handleUpdate(body);
+        return new Response('OK', { status: 200 });
+    } catch (e) {
+        console.error('Bot update error:', e);
+        return new Response('Error', { status: 500 });
+    }
 }
 
+// ========== دوال Webhook المساعدة ==========
 async function handleNewRideWebhook(req: Request, bot: Bot, supabase: any, MINI_APP_URL: string) {
     try {
         const payload: any = await req.json(); const ride = payload.record;

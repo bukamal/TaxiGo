@@ -27,7 +27,6 @@ export const createSupabaseClient = (telegramId?: number): SupabaseClient<Databa
     })
 }
 
-// Default client without Telegram ID (useful for public reads)
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']

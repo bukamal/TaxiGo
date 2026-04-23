@@ -13,40 +13,55 @@ export default function RoleSelectionPage() {
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
-        if (!tgUser?.id) return
+        const userId = tgUser?.id?.toString()
+        console.log('🟢 [RoleSelection] userId:', userId)
+
+        if (!userId) return
+
         const checkAdmin = async () => {
-            const supabase = createSupabaseClient(tgUser.id.toString())
-            const { data } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('key', 'admin_telegram_id')
-                .single()
-            
-            if (data?.value === tgUser.id.toString()) {
-                setIsAdmin(true)
+            try {
+                const supabase = createSupabaseClient(userId)
+                const { data, error } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'admin_telegram_id')
+                    .single()
+
+                if (error) return
+
+                // تحويل القيمة إلى نص (لأنها قد تكون رقماً في JSONB)
+                const adminId = String(data?.value || '').replace(/"/g, '')
+                console.log('🟡 Admin ID:', adminId, 'My ID:', userId)
+
+                if (adminId === userId) {
+                    setIsAdmin(true)
+                }
+            } catch (e) {
+                console.error(e)
             }
         }
+
         checkAdmin()
     }, [tgUser])
 
     const handleAdminLogin = async () => {
-        if (!tgUser) return
+        const userId = tgUser?.id?.toString()
+        if (!userId) return
         setLoading(true)
-        const supabase = createSupabaseClient(tgUser.id.toString())
-        
-        // تأكد من وجود صف الأدمن في profiles
+        const supabase = createSupabaseClient(userId)
+
         const { data: existingAdmin } = await supabase
             .from('profiles')
             .select('id')
-            .eq('telegram_id', tgUser.id.toString())
+            .eq('telegram_id', userId)
             .maybeSingle()
-        
+
         if (!existingAdmin) {
             await supabase.from('profiles').insert({
-                telegram_id: tgUser.id.toString(),
-                first_name: tgUser.first_name || 'Admin',
-                last_name: tgUser.last_name || '',
-                username: tgUser.username || null,
+                telegram_id: userId,
+                first_name: tgUser?.first_name || 'Admin',
+                last_name: tgUser?.last_name || '',
+                username: tgUser?.username || null,
                 role: 'admin',
                 approval_status: 'approved'
             })
@@ -54,9 +69,9 @@ export default function RoleSelectionPage() {
             await supabase.from('profiles').update({
                 role: 'admin',
                 approval_status: 'approved'
-            }).eq('telegram_id', tgUser.id.toString())
+            }).eq('telegram_id', userId)
         }
-        
+
         setLoading(false)
         navigate('/admin')
     }

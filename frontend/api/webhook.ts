@@ -1,4 +1,4 @@
-import { Bot } from 'grammy';
+import { Bot, GrammyError } from 'grammy';
 import { createClient } from '@supabase/supabase-js';
 
 export const config = { runtime: 'edge' };
@@ -31,19 +31,27 @@ export default async function handler(request: Request) {
         else if (profile.approval_status === 'pending') msg += 'حسابك قيد المراجعة.';
         else if (profile.approval_status === 'approved') msg += `مسجل كـ ${profile.role}.`;
         else msg += 'تم رفض الحساب.';
-        await c.reply(msg, {
-            reply_markup: {
-                inline_keyboard: [[{ text: '🚖 فتح التطبيق', web_app: { url: MINI_APP_URL } }]],
-            },
-        });
+        try {
+            await c.reply(msg, {
+                reply_markup: {
+                    inline_keyboard: [[{ text: '🚖 فتح التطبيق', web_app: { url: MINI_APP_URL } }]],
+                },
+            });
+        } catch (err) {
+            if (!(err instanceof GrammyError && err.error_code === 403)) throw err;
+        }
     });
 
     bot.command('admin', async (c) => {
-        await c.reply('لوحة الإدارة داخل التطبيق.', {
-            reply_markup: {
-                inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]],
-            },
-        });
+        try {
+            await c.reply('لوحة الإدارة داخل التطبيق.', {
+                reply_markup: {
+                    inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]],
+                },
+            });
+        } catch (err) {
+            if (!(err instanceof GrammyError && err.error_code === 403)) throw err;
+        }
     });
 
     // استخراج المسار
@@ -79,7 +87,6 @@ export default async function handler(request: Request) {
 
     // Webhook تيليجرام
     try {
-        // تهيئة البوت (مرة واحدة فقط داخل الطلب)
         if (!(bot as any).__initDone) {
             await bot.init();
             (bot as any).__initDone = true;
@@ -88,12 +95,15 @@ export default async function handler(request: Request) {
         await bot.handleUpdate(body);
         return new Response('OK', { status: 200 });
     } catch (e) {
+        if (e instanceof GrammyError && (e.error_code === 403 || e.error_code === 400)) {
+            return new Response('Ignored due to block or init', { status: 200 });
+        }
         console.error('Bot error:', e);
         return new Response('Error', { status: 500 });
     }
 }
 
-// --- دوال Webhooks (كما هي، مع تعديل طفيف لاستخدام `telegram_id` كنص) ---
+// دوال Webhook المساعدة
 async function handleNewRideWebhook(rawBody: string, bot: Bot, supabase: any, MINI_APP_URL: string) {
     try {
         const payload = JSON.parse(rawBody);
@@ -117,7 +127,9 @@ async function handleNewRideWebhook(rawBody: string, bot: Bot, supabase: any, MI
                 await bot.api.sendMessage(d.telegram_id, msg, {
                     reply_markup: { inline_keyboard: [[{ text: '📱 فتح', web_app: { url: `${MINI_APP_URL}/driver` } }]] },
                 });
-            } catch {}
+            } catch (err: any) {
+                if (!err || err.error_code !== 403) console.error('Send error:', err);
+            }
         }
         return new Response(`Notified ${nearby.length} drivers`, { status: 200 });
     } catch (e) { return new Response('Error', { status: 500 }); }
@@ -130,9 +142,13 @@ async function handleNewUserWebhook(rawBody: string, bot: Bot, supabase: any, MI
         if (!user || user.approval_status !== 'pending') return new Response('Ignored', { status: 200 });
         const { data: admin } = await supabase.from('app_settings').select('value').eq('key', 'admin_telegram_id').single();
         if (!admin?.value) return new Response('No admin', { status: 200 });
-        await bot.api.sendMessage(admin.value, `🆕 ${user.role === 'driver' ? 'سائق' : 'زبون'} جديد!\n${user.first_name} ${user.last_name}\n${user.phone}`, {
-            reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] },
-        });
+        try {
+            await bot.api.sendMessage(admin.value, `🆕 ${user.role === 'driver' ? 'سائق' : 'زبون'} جديد!\n${user.first_name} ${user.last_name}\n${user.phone}`, {
+                reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] },
+            });
+        } catch (err: any) {
+            if (!err || err.error_code !== 403) console.error('Send error:', err);
+        }
         return new Response('Admin notified', { status: 200 });
     } catch (e) { return new Response('Error', { status: 500 }); }
 }
@@ -146,20 +162,36 @@ async function handleRideUpdateWebhook(rawBody: string, bot: Bot, supabase: any,
             const { data: driver } = await supabase.from('profiles').select('first_name, last_name, phone, rating').eq('id', newR.driver_id).single();
             const { data: cust } = await supabase.from('profiles').select('telegram_id').eq('id', newR.customer_id).single();
             if (driver && cust) {
-                await bot.api.sendMessage(cust.telegram_id, `✅ تم قبول رحلتك!\nالسائق: ${driver.first_name} ${driver.last_name}\nالتقييم: ${driver.rating || '5.0'}\nالهاتف: ${driver.phone || 'غير متوفر'}`, {
-                    reply_markup: { inline_keyboard: [[{ text: '📍 تتبع', web_app: { url: `${MINI_APP_URL}/ride/${newR.id}` } }]] },
-                });
+                try {
+                    await bot.api.sendMessage(cust.telegram_id, `✅ تم قبول رحلتك!\nالسائق: ${driver.first_name} ${driver.last_name}\nالتقييم: ${driver.rating || '5.0'}\nالهاتف: ${driver.phone || 'غير متوفر'}`, {
+                        reply_markup: { inline_keyboard: [[{ text: '📍 تتبع', web_app: { url: `${MINI_APP_URL}/ride/${newR.id}` } }]] },
+                    });
+                } catch (err: any) {
+                    if (!err || err.error_code !== 403) console.error('Send error:', err);
+                }
             }
         }
         if (oldR.status === 'accepted' && newR.status === 'picked_up') {
             const { data: cust } = await supabase.from('profiles').select('telegram_id').eq('id', newR.customer_id).single();
-            if (cust) await bot.api.sendMessage(cust.telegram_id, `🚗 السائق وصل إلى موقع الالتقاط.`);
+            if (cust) {
+                try {
+                    await bot.api.sendMessage(cust.telegram_id, `🚗 السائق وصل إلى موقع الالتقاط.`);
+                } catch (err: any) {
+                    if (!err || err.error_code !== 403) console.error('Send error:', err);
+                }
+            }
         }
         if (newR.status === 'cancelled') {
             const uid = newR.customer_id === oldR.customer_id ? newR.driver_id : newR.customer_id;
             if (uid) {
                 const { data: u } = await supabase.from('profiles').select('telegram_id').eq('id', uid).single();
-                if (u) await bot.api.sendMessage(u.telegram_id, `❌ تم إلغاء الرحلة.`);
+                if (u) {
+                    try {
+                        await bot.api.sendMessage(u.telegram_id, `❌ تم إلغاء الرحلة.`);
+                    } catch (err: any) {
+                        if (!err || err.error_code !== 403) console.error('Send error:', err);
+                    }
+                }
             }
         }
         return new Response('Notified', { status: 200 });

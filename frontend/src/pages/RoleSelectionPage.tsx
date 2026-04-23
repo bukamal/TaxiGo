@@ -42,20 +42,30 @@ export default function RoleSelectionPage() {
     }, [tgUser])
 
     const handleAdminLogin = async (forcedId?: string) => {
+        alert('🟢 بدء تسجيل دخول الأدمن...')
         const userId = forcedId || tgUser?.id?.toString()
-        if (!userId) return alert('الرجاء إدخال معرف تيليجرام')
+        alert('🟡 المعرف المستخدم: ' + userId)
+        
+        if (!userId) {
+            alert('🔴 لا يوجد معرف!')
+            return
+        }
         
         setLoading(true)
+        alert('🟣 جاري التحقق من هوية الأدمن...')
         const isAdminUser = await checkAdminStatus(userId)
+        alert('🟣 نتيجة التحقق: ' + isAdminUser)
         
         if (!isAdminUser) {
+            alert('🔴 هذا المعرف ليس الأدمن!')
             setLoading(false)
-            return alert('❌ هذا المعرف ليس الأدمن!')
+            return
         }
 
         try {
+            alert('🟠 جاري حفظ بيانات الأدمن...')
             const supabase = createSupabaseClient(userId)
-            await supabase.from('profiles').upsert({
+            const { error } = await supabase.from('profiles').upsert({
                 telegram_id: userId,
                 first_name: tgUser?.first_name || 'Admin',
                 last_name: tgUser?.last_name || '',
@@ -63,15 +73,17 @@ export default function RoleSelectionPage() {
                 role: 'admin',
                 approval_status: 'approved'
             }, { onConflict: 'telegram_id' })
+            alert('🟠 نتيجة الحفظ: ' + (error ? error.message : 'نجاح'))
         } catch (e) {
-            alert('❌ خطأ في حفظ بيانات الأدمن: ' + e)
+            alert('🔴 استثناء أثناء الحفظ: ' + e)
             setLoading(false)
             return
         }
 
         setLoading(false)
-        // استخدام navigate (التنقل الداخلي) بدلاً من window.location.href
+        alert('🟢 جاري الانتقال إلى /admin...')
         navigate('/admin', { replace: true })
+        alert('🟢 تم استدعاء navigate')
     }
 
     return (
@@ -135,21 +147,20 @@ export default function RoleSelectionPage() {
                         </div>
                     </button>
 
-                    {isAdmin && !showManual && (
-                        <button
-                            onClick={() => handleAdminLogin()}
-                            disabled={loading}
-                            className="w-full p-6 border-2 border-purple-300 dark:border-purple-700 rounded-2xl flex items-center gap-4 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-500 transition-colors"
-                        >
-                            <div className="w-16 h-16 bg-purple-100 dark:bg-purple-800/50 rounded-2xl flex items-center justify-center">
-                                <Shield className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-                            </div>
-                            <div className="flex-1 text-left">
-                                <h2 className="text-xl font-semibold dark:text-white">أنا الأدمن</h2>
-                                <p className="text-gray-500 dark:text-gray-400 text-sm">الدخول إلى لوحة التحكم</p>
-                            </div>
-                        </button>
-                    )}
+                    {/* زر الأدمن مرئي دائمًا للتشخيص */}
+                    <button
+                        onClick={() => handleAdminLogin(manualId || tgUser?.id?.toString())}
+                        disabled={loading}
+                        className="w-full p-6 border-2 border-purple-300 dark:border-purple-700 rounded-2xl flex items-center gap-4 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-500 transition-colors"
+                    >
+                        <div className="w-16 h-16 bg-purple-100 dark:bg-purple-800/50 rounded-2xl flex items-center justify-center">
+                            <Shield className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                            <h2 className="text-xl font-semibold dark:text-white">أنا الأدمن (تشخيص)</h2>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">اضغط للدخول إلى لوحة التحكم</p>
+                        </div>
+                    </button>
                 </div>
             </div>
         </div>

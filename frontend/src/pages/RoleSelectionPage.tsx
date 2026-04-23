@@ -14,7 +14,6 @@ export default function RoleSelectionPage() {
     const [manualId, setManualId] = useState('')
     const [showManual, setShowManual] = useState(false)
 
-    // دالة موحدة للتحقق من الأدمن
     const checkAdminStatus = async (userId: string) => {
         if (!userId) return false
         const supabase = createSupabaseClient(userId)
@@ -24,13 +23,8 @@ export default function RoleSelectionPage() {
             .eq('key', 'admin_telegram_id')
             .maybeSingle()
         
-        if (error || !data?.value) {
-            alert('❌ خطأ في جلب بيانات الأدمن: ' + (error?.message || 'لا توجد قيمة'))
-            return false
-        }
-        
+        if (error || !data?.value) return false
         const adminId = String(data.value).replace(/"/g, '')
-        alert('🔍 المقارنة:\nمعرفك: ' + userId + '\nمعرف الأدمن: ' + adminId)
         return adminId === userId
     }
 
@@ -59,10 +53,9 @@ export default function RoleSelectionPage() {
             return alert('❌ هذا المعرف ليس الأدمن!')
         }
 
-        // إنشاء أو تحديث صف الأدمن
         try {
             const supabase = createSupabaseClient(userId)
-            const { error } = await supabase.from('profiles').upsert({
+            await supabase.from('profiles').upsert({
                 telegram_id: userId,
                 first_name: tgUser?.first_name || 'Admin',
                 last_name: tgUser?.last_name || '',
@@ -70,22 +63,15 @@ export default function RoleSelectionPage() {
                 role: 'admin',
                 approval_status: 'approved'
             }, { onConflict: 'telegram_id' })
-
-            if (error) {
-                alert('❌ خطأ في حفظ بيانات الأدمن: ' + error.message)
-                setLoading(false)
-                return
-            }
         } catch (e) {
-            alert('❌ استثناء: ' + e)
+            alert('❌ خطأ في حفظ بيانات الأدمن: ' + e)
             setLoading(false)
             return
         }
 
         setLoading(false)
-        alert('✅ تم التحقق، جاري الانتقال إلى لوحة الإدارة...')
-        // استخدام href للتنقل القسري
-        window.location.href = '/admin'
+        // استخدام navigate (التنقل الداخلي) بدلاً من window.location.href
+        navigate('/admin', { replace: true })
     }
 
     return (

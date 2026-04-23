@@ -14,7 +14,7 @@ export default function RoleSelectionPage() {
     const [manualId, setManualId] = useState('')
     const [showManual, setShowManual] = useState(false)
 
-    // دالة موحدة للتحقق من الأدمن (تُستخدم لكل من tgUser والمعرف اليدوي)
+    // دالة موحدة للتحقق من الأدمن
     const checkAdminStatus = async (userId: string) => {
         if (!userId) return false
         const supabase = createSupabaseClient(userId)
@@ -22,12 +22,15 @@ export default function RoleSelectionPage() {
             .from('app_settings')
             .select('value')
             .eq('key', 'admin_telegram_id')
-            .single()
+            .maybeSingle()
         
-        if (error || !data?.value) return false
+        if (error || !data?.value) {
+            alert('❌ خطأ في جلب بيانات الأدمن: ' + (error?.message || 'لا توجد قيمة'))
+            return false
+        }
         
-        // تحويل القيمة إلى نص خام (تزيل أي علامات تنصيص JSON)
         const adminId = String(data.value).replace(/"/g, '')
+        alert('🔍 المقارنة:\nمعرفك: ' + userId + '\nمعرف الأدمن: ' + adminId)
         return adminId === userId
     }
 
@@ -38,7 +41,10 @@ export default function RoleSelectionPage() {
             return
         }
 
-        checkAdminStatus(userId).then(setIsAdmin)
+        checkAdminStatus(userId).then(result => {
+            setIsAdmin(result)
+            if (!result) setShowManual(true)
+        })
     }, [tgUser])
 
     const handleAdminLogin = async (forcedId?: string) => {
@@ -50,21 +56,36 @@ export default function RoleSelectionPage() {
         
         if (!isAdminUser) {
             setLoading(false)
-            return alert('هذا المعرف ليس الأدمن')
+            return alert('❌ هذا المعرف ليس الأدمن!')
         }
 
-        const supabase = createSupabaseClient(userId)
-        await supabase.from('profiles').upsert({
-            telegram_id: userId,
-            first_name: tgUser?.first_name || 'Admin',
-            last_name: tgUser?.last_name || '',
-            username: tgUser?.username || null,
-            role: 'admin',
-            approval_status: 'approved'
-        }, { onConflict: 'telegram_id' })
+        // إنشاء أو تحديث صف الأدمن
+        try {
+            const supabase = createSupabaseClient(userId)
+            const { error } = await supabase.from('profiles').upsert({
+                telegram_id: userId,
+                first_name: tgUser?.first_name || 'Admin',
+                last_name: tgUser?.last_name || '',
+                username: tgUser?.username || null,
+                role: 'admin',
+                approval_status: 'approved'
+            }, { onConflict: 'telegram_id' })
+
+            if (error) {
+                alert('❌ خطأ في حفظ بيانات الأدمن: ' + error.message)
+                setLoading(false)
+                return
+            }
+        } catch (e) {
+            alert('❌ استثناء: ' + e)
+            setLoading(false)
+            return
+        }
 
         setLoading(false)
-        navigate('/admin')
+        alert('✅ تم التحقق، جاري الانتقال إلى لوحة الإدارة...')
+        // استخدام href للتنقل القسري
+        window.location.href = '/admin'
     }
 
     return (

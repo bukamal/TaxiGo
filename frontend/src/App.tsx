@@ -32,13 +32,11 @@ function AppContent() {
         const telegramId = tgUser?.id?.toString()
 
         if (!telegramId) {
-            // لا يوجد معرف تيليجرام (متصفح عادي) – اذهب إلى Onboarding مباشرة
             setAppState(seen ? 'choose_role' : 'onboarding')
             setLoading(false)
             return
         }
 
-        // البحث عن المستخدم في Supabase
         const checkUser = async () => {
             const supabase = createSupabaseClient(telegramId)
             const { data, error } = await supabase
@@ -48,12 +46,11 @@ function AppContent() {
                 .maybeSingle()
 
             if (error || !data) {
-                // مستخدم جديد أو خطأ – ابدأ من Onboarding/اختيار الدور
                 setAppState(seen ? 'choose_role' : 'onboarding')
             } else {
                 setProfile(data)
                 if (data.approval_status === 'approved') {
-                    // تنبيه: الأدمن لن يتم توجيهه مباشرة إلى /admin، بل يذهب إلى /choose-role ليرى زر "أنا الأدمن"
+                    // الأدمن سيتم توجيهه إلى choose_role ليرى زر "أنا الأدمن"
                     setAppState('choose_role')
                 } else if (data.approval_status === 'pending') {
                     setAppState('pending')
@@ -73,14 +70,8 @@ function AppContent() {
     }
 
     if (loading) {
-        return (
-            <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <p className="text-lg">تاكسي جو 🚕</p>
-            </div>
-        )
+        return <div className="h-screen flex items-center justify-center">تاكسي جو 🚕</div>
     }
-
-    console.log('AppState:', appState, 'Profile:', profile)
 
     return (
         <BrowserRouter>
@@ -97,18 +88,17 @@ function AppContent() {
 
                 {appState === 'approved' && (
                     <Route path="/" element={<Layout />}>
-                        <Route index element={
-                            profile?.role === 'driver' ? <Navigate to="/driver" replace /> :
-                            <HomePage />
-                        } />
+                        <Route index element={profile?.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
                         <Route path="ride/:id" element={<RidePage />} />
                         <Route path="driver" element={<DriverDashboard />} />
                         <Route path="driver/vehicle" element={<DriverVehiclePage />} />
                         <Route path="profile" element={<ProfilePage />} />
-                        <Route path="admin" element={<AdminPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 )}
+
+                {/* مسار الأدمن متاح دائمًا، مع حماية داخلية */}
+                <Route path="/admin" element={<AdminPage />} />
             </Routes>
         </BrowserRouter>
     )

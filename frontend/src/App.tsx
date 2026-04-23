@@ -27,10 +27,9 @@ function AppContent() {
     const [appState, setAppState] = useState<'onboarding' | 'choose_role' | 'approved' | 'pending'>('onboarding')
     const [loading, setLoading] = useState(true)
 
-    // تحميل تفضيل Onboarding من localStorage
     useEffect(() => {
         const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
-        const telegramId = tgUser?.id
+        const telegramId = tgUser?.id?.toString()
 
         if (!telegramId) {
             // لا يوجد معرف تيليجرام (متصفح عادي) – اذهب إلى Onboarding مباشرة
@@ -95,7 +94,11 @@ function AppContent() {
 
                 {appState === 'approved' && (
                     <Route path="/" element={<Layout />}>
-                        <Route index element={profile?.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
+                        <Route index element={
+                            profile?.role === 'admin' ? <Navigate to="/admin" replace /> :
+                            profile?.role === 'driver' ? <Navigate to="/driver" replace /> :
+                            <HomePage />
+                        } />
                         <Route path="ride/:id" element={<RidePage />} />
                         <Route path="driver" element={<DriverDashboard />} />
                         <Route path="driver/vehicle" element={<DriverVehiclePage />} />

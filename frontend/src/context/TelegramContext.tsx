@@ -7,20 +7,43 @@ const TelegramContext = createContext<TelegramContextType>({ tg: null, user: nul
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
     const [tg, setTg] = useState<any>(null)
     const [user, setUser] = useState<TelegramUser | null>(null)
-    const [isReady, setIsReady] = useState(true) // ✅ جاهز دائمًا
+    const [isReady, setIsReady] = useState(false)
 
     useEffect(() => {
-        const app = (window as any).Telegram?.WebApp
-        if (app) {
-            console.log('✅ Telegram WebApp found')
-            app.ready()
-            app.expand()
-            setTg(app)
-            setUser(app.initDataUnsafe?.user)
-        } else {
-            console.log('⚠️ No Telegram WebApp, running in browser mode')
+        let attempts = 0
+        const maxAttempts = 10
+
+        const tryGetUser = () => {
+            const app = (window as any).Telegram?.WebApp
+            if (app) {
+                console.log('✅ Telegram WebApp found')
+                app.ready()
+                app.expand()
+                setTg(app)
+
+                const userData = app.initDataUnsafe?.user
+                if (userData) {
+                    console.log('👤 User data:', userData)
+                    setUser(userData)
+                    setIsReady(true)
+                    return
+                } else {
+                    console.warn('⚠️ WebApp found but no user data yet')
+                }
+            } else {
+                console.warn('⚠️ Telegram WebApp not found')
+            }
+
+            attempts++
+            if (attempts < maxAttempts) {
+                setTimeout(tryGetUser, 500)
+            } else {
+                console.error('❌ Failed to get Telegram user after max attempts')
+                setIsReady(true) // جاهز لكن بدون مستخدم
+            }
         }
-        // لا نغير isReady - يبقى true
+
+        tryGetUser()
     }, [])
 
     return (

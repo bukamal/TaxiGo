@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTelegram } from '../context/TelegramContext'
 import { createSupabaseClient } from '../lib/supabaseClient'
 import { useLanguage } from '../context/LanguageContext'
-import { User, Car, Shield } from 'lucide-react'
+import { User, Car, Shield, AlertCircle } from 'lucide-react'
 
 export default function RoleSelectionPage() {
     const { user: tgUser } = useTelegram()
@@ -11,11 +11,13 @@ export default function RoleSelectionPage() {
     const { t } = useLanguage()
     const [isAdmin, setIsAdmin] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [manualId, setManualId] = useState('')
+    const [showManual, setShowManual] = useState(false)
 
     useEffect(() => {
         const userId = tgUser?.id?.toString()
         if (!userId) {
-            alert('❌ لا يوجد معرف تيليجرام (tgUser = null)')
+            setShowManual(true)
             return
         }
 
@@ -28,33 +30,38 @@ export default function RoleSelectionPage() {
                     .eq('key', 'admin_telegram_id')
                     .single()
 
-                if (error) {
-                    alert('❌ خطأ في جلب app_settings:\n' + error.message)
-                    return
-                }
+                if (error) return
 
-                const adminId = String(data?.value || '')
-                alert('🟢 معرفي: ' + userId + '\n🟢 معرف الأدمن في القاعدة: ' + adminId)
-
+                const adminId = String(data?.value || '').replace(/"/g, '')
                 if (adminId === userId) {
                     setIsAdmin(true)
-                    alert('✅ أنا الأدمن! سيظهر الزر.')
-                } else {
-                    alert('❌ لست الأدمن. المعرفان مختلفان.')
                 }
             } catch (e) {
-                alert('❌ استثناء:' + e)
+                console.error(e)
             }
         }
 
         checkAdmin()
     }, [tgUser])
 
-    const handleAdminLogin = async () => {
-        const userId = tgUser?.id?.toString()
-        if (!userId) return
+    const handleAdminLogin = async (forcedId?: string) => {
+        const userId = forcedId || tgUser?.id?.toString()
+        if (!userId) return alert('الرجاء إدخال معرف تيليجرام')
         setLoading(true)
         const supabase = createSupabaseClient(userId)
+
+        // تحقق سريع من كونه أدمن
+        const { data: settings } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'admin_telegram_id')
+            .single()
+
+        const adminId = String(settings?.value || '').replace(/"/g, '')
+        if (adminId !== userId) {
+            setLoading(false)
+            return alert('هذا المعرف ليس الأدمن')
+        }
 
         await supabase.from('profiles').upsert({
             telegram_id: userId,
@@ -74,6 +81,35 @@ export default function RoleSelectionPage() {
             <div className="flex-1 flex flex-col justify-center">
                 <h1 className="text-3xl font-bold mb-2 dark:text-white">{t('role.title')}</h1>
                 <p className="text-gray-500 dark:text-gray-400 mb-8">{t('role.subtitle')}</p>
+
+                {showManual && (
+                    <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-700">
+                        <div className="flex items-center gap-2 mb-2">
+                            <AlertCircle className="w-5 h-5 text-yellow-600" />
+                            <span className="font-medium text-yellow-800 dark:text-yellow-200">لم يتم التعرف على حساب تيليجرام</span>
+                        </div>
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+                            تأكد من فتح التطبيق من داخل بوت تيليجرام. إذا كنت أدمن، يمكنك إدخال معرفك يدوياً:
+                        </p>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={manualId}
+                                onChange={(e) => setManualId(e.target.value)}
+                                placeholder="أدخل معرف تيليجرام (رقم)"
+                                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-yellow-300 dark:border-yellow-600 text-sm"
+                            />
+                            <button
+                                onClick={() => handleAdminLogin(manualId)}
+                                disabled={!manualId || loading}
+                                className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700 disabled:opacity-50"
+                            >
+                                دخول
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-4">
                     <button
                         onClick={() => navigate('/signup/customer')}
@@ -101,9 +137,9 @@ export default function RoleSelectionPage() {
                         </div>
                     </button>
 
-                    {isAdmin && (
+                    {isAdmin && !showManual && (
                         <button
-                            onClick={handleAdminLogin}
+                            onClick={() => handleAdminLogin()}
                             disabled={loading}
                             className="w-full p-6 border-2 border-purple-300 dark:border-purple-700 rounded-2xl flex items-center gap-4 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-500 transition-colors"
                         >

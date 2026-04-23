@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTelegram } from '../context/TelegramContext'
 import { createSupabaseClient } from '../lib/supabaseClient'
 import { useLanguage } from '../context/LanguageContext'
-import { User, Car, Shield, AlertCircle, LogOut } from 'lucide-react'
+import { User, Car, Shield } from 'lucide-react'
 
 const ADMIN_ID_KEY = 'taxigo_admin_id'
 
@@ -13,31 +13,32 @@ export default function RoleSelectionPage() {
     const { t } = useLanguage()
     const [loading, setLoading] = useState(false)
     const [manualId, setManualId] = useState(localStorage.getItem(ADMIN_ID_KEY) || '')
-    const [isAdmin, setIsAdmin] = useState(false)
-
-    useEffect(() => {
-        if (tgUser?.id) {
-            checkAdmin(tgUser.id.toString())
-        }
-    }, [tgUser])
-
-    const checkAdmin = async (userId: string) => {
-        const supabase = createSupabaseClient(userId)
-        const { data } = await supabase.from('app_settings').select('value').eq('key', 'admin_telegram_id').single()
-        if (data?.value && String(data.value).replace(/"/g, '') === userId) {
-            setIsAdmin(true)
-            // تخزين المعرف تلقائيًا
-            localStorage.setItem(ADMIN_ID_KEY, userId)
-        }
-    }
 
     const handleAdminLogin = async (userId: string) => {
         if (!userId) return alert('الرجاء إدخال معرف تيليجرام')
         setLoading(true)
-        // تخزين المعرف
-        localStorage.setItem(ADMIN_ID_KEY, userId)
+        
+        // حذف أي قيمة سابقة خاطئة
+        localStorage.removeItem(ADMIN_ID_KEY)
         
         const supabase = createSupabaseClient(userId)
+        // التحقق من كونه أدمن
+        const { data: settings } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'admin_telegram_id')
+            .single()
+
+        const adminId = String(settings?.value || '').replace(/"/g, '')
+        if (adminId !== userId) {
+            setLoading(false)
+            return alert('هذا المعرف ليس الأدمن')
+        }
+
+        // تخزين المعرف الصحيح
+        localStorage.setItem(ADMIN_ID_KEY, userId)
+        
+        // إنشاء/تحديث صف الأدمن
         await supabase.from('profiles').upsert({
             telegram_id: userId,
             first_name: tgUser?.first_name || 'Admin',
@@ -46,9 +47,9 @@ export default function RoleSelectionPage() {
             role: 'admin',
             approval_status: 'approved'
         }, { onConflict: 'telegram_id' })
-        
+
         setLoading(false)
-        // إعادة التحميل ليتم التعرف على المعرف في App.tsx
+        // التنقل المباشر إلى /admin
         window.location.href = '/admin'
     }
 
@@ -68,7 +69,7 @@ export default function RoleSelectionPage() {
                         <div className="flex-1 text-left"><h2 className="text-xl font-semibold dark:text-white">{t('role.driver_title')}</h2><p className="text-gray-500 dark:text-gray-400 text-sm">{t('role.driver_desc')}</p></div>
                     </button>
 
-                    {/* قسم الأدمن - يظهر للجميع */}
+                    {/* قسم الأدمن يظهر للجميع */}
                     <div className="p-4 border-2 border-purple-200 dark:border-purple-800 rounded-2xl bg-purple-50 dark:bg-purple-900/20">
                         <div className="flex items-center gap-2 mb-3">
                             <Shield className="w-6 h-6 text-purple-600" />
@@ -79,7 +80,7 @@ export default function RoleSelectionPage() {
                                 type="text"
                                 value={manualId}
                                 onChange={(e) => setManualId(e.target.value)}
-                                placeholder="أدخل معرف تيليجرام"
+                                placeholder="معرف تيليجرام"
                                 className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-purple-300 dark:border-purple-600 text-sm"
                             />
                             <button

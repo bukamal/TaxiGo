@@ -25,8 +25,8 @@ const ADMIN_ID_KEY = 'taxigo_admin_id'
 function AppContent() {
     const { user: tgUser } = useTelegram()
     const { setProfile, profile } = useAppStore()
-    const [appState, setAppState] = useState<'onboarding' | 'choose_role' | 'approved' | 'pending'>('onboarding')
-    const [loading, setLoading] = useState(true)
+    const [appState, setAppState] = useState<'onboarding' | 'choose_role' | 'approved' | 'pending'>('choose_role')
+    const [loading, setLoading] = useState(false) // ❌ لا يوجد تحميل افتراضي
 
     useEffect(() => {
         const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
@@ -34,12 +34,12 @@ function AppContent() {
         const telegramId = tgUser?.id?.toString() || storedAdminId
 
         if (!telegramId) {
-            // لا يوجد معرف: انتقل مباشرة
+            // لا يوجد معرف: انتقل مباشرة إلى choose_role
             setAppState(seen ? 'choose_role' : 'onboarding')
-            setLoading(false)
             return
         }
 
+        // محاولة صامتة لجلب بيانات المستخدم
         const checkUser = async () => {
             try {
                 const supabase = createSupabaseClient(telegramId)
@@ -64,11 +64,8 @@ function AppContent() {
                     }
                 }
             } catch (e) {
-                console.error('❌ فشل جلب المستخدم:', e)
-                // في حالة الفشل، نذهب إلى choose_role كحل آمن
+                // فشل صامت: البقاء في choose_role
                 setAppState('choose_role')
-            } finally {
-                setLoading(false)
             }
         }
 
@@ -80,14 +77,7 @@ function AppContent() {
         setAppState('choose_role')
     }
 
-    if (loading) {
-        return (
-            <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <p className="text-lg">تاكسي جو 🚕 جاري التحميل...</p>
-            </div>
-        )
-    }
-
+    // لا نعرض شاشة تحميل أبدًا
     return (
         <BrowserRouter>
             <Routes>

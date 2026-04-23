@@ -1,9 +1,7 @@
 import { Bot } from 'grammy';
 import { createClient } from '@supabase/supabase-js';
 
-export const config = {
-    runtime: 'edge',
-};
+export const config = { runtime: 'edge' };
 
 export default async function handler(request: Request) {
     const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -22,12 +20,11 @@ export default async function handler(request: Request) {
 
     // تعريف الأوامر
     bot.command('start', async (c) => {
-        const user = c.from;
-        if (!user) return;
+        const user = c.from; if (!user) return;
         const { data: profile } = await supabase
             .from('profiles')
             .select('approval_status, role')
-            .eq('telegram_id', user.id)
+            .eq('telegram_id', user.id.toString())
             .maybeSingle();
         let msg = 'مرحباً في تاكسي جو! 🚕\n';
         if (!profile) msg += 'الرجاء التسجيل عبر التطبيق.';
@@ -51,15 +48,9 @@ export default async function handler(request: Request) {
 
     // استخراج المسار
     let path = '/';
-    try {
-        const url = new URL(request.url);
-        path = url.pathname;
-    } catch {
-        const match = request.url.match(/^https?:\/\/[^/]+(\/[^?]*)/);
-        path = match ? match[1] : '/';
-    }
+    try { path = new URL(request.url).pathname; } catch {}
 
-    // قراءة الجسم بطريقة آمنة لـ Vercel Edge
+    // قراءة الجسم
     let rawBody = '{}';
     try {
         if (request.body) {
@@ -71,17 +62,15 @@ export default async function handler(request: Request) {
                 chunks.push(value);
             }
             rawBody = new TextDecoder().decode(
-                chunks.reduce((acc, chunk) => {
-                    const tmp = new Uint8Array(acc.length + chunk.length);
+                chunks.reduce((acc, ch) => {
+                    const tmp = new Uint8Array(acc.length + ch.length);
                     tmp.set(acc, 0);
-                    tmp.set(chunk, acc.length);
+                    tmp.set(ch, acc.length);
                     return tmp;
                 }, new Uint8Array())
             );
         }
-    } catch (e) {
-        console.error('Body read error:', e);
-    }
+    } catch (e) {}
 
     // Webhooks من Supabase
     if (path === '/api/webhook/new-ride') return handleNewRideWebhook(rawBody, bot, supabase, MINI_APP_URL);
@@ -90,6 +79,11 @@ export default async function handler(request: Request) {
 
     // Webhook تيليجرام
     try {
+        // تهيئة البوت (مرة واحدة فقط داخل الطلب)
+        if (!(bot as any).__initDone) {
+            await bot.init();
+            (bot as any).__initDone = true;
+        }
         const body = JSON.parse(rawBody || '{}');
         await bot.handleUpdate(body);
         return new Response('OK', { status: 200 });
@@ -99,6 +93,7 @@ export default async function handler(request: Request) {
     }
 }
 
+// --- دوال Webhooks (كما هي، مع تعديل طفيف لاستخدام `telegram_id` كنص) ---
 async function handleNewRideWebhook(rawBody: string, bot: Bot, supabase: any, MINI_APP_URL: string) {
     try {
         const payload = JSON.parse(rawBody);
@@ -112,10 +107,7 @@ async function handleNewRideWebhook(rawBody: string, bot: Bot, supabase: any, MI
             .eq('is_online', true);
         if (!drivers?.length) return new Response('No drivers', { status: 200 });
         const nearby = drivers
-            .map((d: any) => ({
-                ...d,
-                distance: getDistance(ride.pickup_lat, ride.pickup_lng, d.latitude, d.longitude),
-            }))
+            .map((d: any) => ({ ...d, distance: getDistance(ride.pickup_lat, ride.pickup_lng, d.latitude, d.longitude) }))
             .filter((d: any) => d.distance < 10)
             .sort((a: any, b: any) => a.distance - b.distance)
             .slice(0, 5);
@@ -128,9 +120,7 @@ async function handleNewRideWebhook(rawBody: string, bot: Bot, supabase: any, MI
             } catch {}
         }
         return new Response(`Notified ${nearby.length} drivers`, { status: 200 });
-    } catch (e) {
-        return new Response('Error', { status: 500 });
-    }
+    } catch (e) { return new Response('Error', { status: 500 }); }
 }
 
 async function handleNewUserWebhook(rawBody: string, bot: Bot, supabase: any, MINI_APP_URL: string) {
@@ -138,46 +128,27 @@ async function handleNewUserWebhook(rawBody: string, bot: Bot, supabase: any, MI
         const payload = JSON.parse(rawBody);
         const user = payload.record;
         if (!user || user.approval_status !== 'pending') return new Response('Ignored', { status: 200 });
-        const { data: admin } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'admin_telegram_id')
-            .single();
+        const { data: admin } = await supabase.from('app_settings').select('value').eq('key', 'admin_telegram_id').single();
         if (!admin?.value) return new Response('No admin', { status: 200 });
-        await bot.api.sendMessage(
-            admin.value,
-            `🆕 ${user.role === 'driver' ? 'سائق' : 'زبون'} جديد!\n${user.first_name} ${user.last_name}\n${user.phone}`,
-            {
-                reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] },
-            }
-        );
+        await bot.api.sendMessage(admin.value, `🆕 ${user.role === 'driver' ? 'سائق' : 'زبون'} جديد!\n${user.first_name} ${user.last_name}\n${user.phone}`, {
+            reply_markup: { inline_keyboard: [[{ text: '🔐 لوحة الإدارة', web_app: { url: `${MINI_APP_URL}/admin` } }]] },
+        });
         return new Response('Admin notified', { status: 200 });
-    } catch (e) {
-        return new Response('Error', { status: 500 });
-    }
+    } catch (e) { return new Response('Error', { status: 500 }); }
 }
 
 async function handleRideUpdateWebhook(rawBody: string, bot: Bot, supabase: any, MINI_APP_URL: string) {
     try {
         const payload = JSON.parse(rawBody);
-        const oldR = payload.old_record;
-        const newR = payload.record;
+        const oldR = payload.old_record, newR = payload.record;
         if (!oldR || !newR || oldR.status === newR.status) return new Response('No change', { status: 200 });
         if (oldR.status === 'pending' && newR.status === 'accepted') {
-            const { data: driver } = await supabase
-                .from('profiles')
-                .select('first_name, last_name, phone, rating')
-                .eq('id', newR.driver_id)
-                .single();
+            const { data: driver } = await supabase.from('profiles').select('first_name, last_name, phone, rating').eq('id', newR.driver_id).single();
             const { data: cust } = await supabase.from('profiles').select('telegram_id').eq('id', newR.customer_id).single();
             if (driver && cust) {
-                await bot.api.sendMessage(
-                    cust.telegram_id,
-                    `✅ تم قبول رحلتك!\nالسائق: ${driver.first_name} ${driver.last_name}\nالتقييم: ${driver.rating || '5.0'}\nالهاتف: ${driver.phone || 'غير متوفر'}`,
-                    {
-                        reply_markup: { inline_keyboard: [[{ text: '📍 تتبع', web_app: { url: `${MINI_APP_URL}/ride/${newR.id}` } }]] },
-                    }
-                );
+                await bot.api.sendMessage(cust.telegram_id, `✅ تم قبول رحلتك!\nالسائق: ${driver.first_name} ${driver.last_name}\nالتقييم: ${driver.rating || '5.0'}\nالهاتف: ${driver.phone || 'غير متوفر'}`, {
+                    reply_markup: { inline_keyboard: [[{ text: '📍 تتبع', web_app: { url: `${MINI_APP_URL}/ride/${newR.id}` } }]] },
+                });
             }
         }
         if (oldR.status === 'accepted' && newR.status === 'picked_up') {
@@ -192,9 +163,7 @@ async function handleRideUpdateWebhook(rawBody: string, bot: Bot, supabase: any,
             }
         }
         return new Response('Notified', { status: 200 });
-    } catch (e) {
-        return new Response('Error', { status: 500 });
-    }
+    } catch (e) { return new Response('Error', { status: 500 }); }
 }
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

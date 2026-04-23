@@ -14,6 +14,23 @@ export default function RoleSelectionPage() {
     const [manualId, setManualId] = useState('')
     const [showManual, setShowManual] = useState(false)
 
+    // دالة موحدة للتحقق من الأدمن (تُستخدم لكل من tgUser والمعرف اليدوي)
+    const checkAdminStatus = async (userId: string) => {
+        if (!userId) return false
+        const supabase = createSupabaseClient(userId)
+        const { data, error } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'admin_telegram_id')
+            .single()
+        
+        if (error || !data?.value) return false
+        
+        // تحويل القيمة إلى نص خام (تزيل أي علامات تنصيص JSON)
+        const adminId = String(data.value).replace(/"/g, '')
+        return adminId === userId
+    }
+
     useEffect(() => {
         const userId = tgUser?.id?.toString()
         if (!userId) {
@@ -21,48 +38,22 @@ export default function RoleSelectionPage() {
             return
         }
 
-        const checkAdmin = async () => {
-            try {
-                const supabase = createSupabaseClient(userId)
-                const { data, error } = await supabase
-                    .from('app_settings')
-                    .select('value')
-                    .eq('key', 'admin_telegram_id')
-                    .single()
-
-                if (error) return
-
-                const adminId = String(data?.value || '').replace(/"/g, '')
-                if (adminId === userId) {
-                    setIsAdmin(true)
-                }
-            } catch (e) {
-                console.error(e)
-            }
-        }
-
-        checkAdmin()
+        checkAdminStatus(userId).then(setIsAdmin)
     }, [tgUser])
 
     const handleAdminLogin = async (forcedId?: string) => {
         const userId = forcedId || tgUser?.id?.toString()
         if (!userId) return alert('الرجاء إدخال معرف تيليجرام')
+        
         setLoading(true)
-        const supabase = createSupabaseClient(userId)
-
-        // تحقق سريع من كونه أدمن
-        const { data: settings } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'admin_telegram_id')
-            .single()
-
-        const adminId = String(settings?.value || '').replace(/"/g, '')
-        if (adminId !== userId) {
+        const isAdminUser = await checkAdminStatus(userId)
+        
+        if (!isAdminUser) {
             setLoading(false)
             return alert('هذا المعرف ليس الأدمن')
         }
 
+        const supabase = createSupabaseClient(userId)
         await supabase.from('profiles').upsert({
             telegram_id: userId,
             first_name: tgUser?.first_name || 'Admin',

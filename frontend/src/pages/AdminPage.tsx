@@ -9,7 +9,7 @@ type Tab = 'pending' | 'users' | 'rides' | 'stats'
 export default function AdminPage() {
     const { user: tgUser } = useTelegram()
     const { t } = useLanguage()
-    const supabase = createSupabaseClient(tgUser?.id)
+    const supabase = createSupabaseClient(tgUser?.id?.toString())
     const [activeTab, setActiveTab] = useState<Tab>('pending')
     const [pending, setPending] = useState<any[]>([])
     const [users, setUsers] = useState<any[]>([])
@@ -18,10 +18,12 @@ export default function AdminPage() {
     const [selected, setSelected] = useState<any>(null)
     const [details, setDetails] = useState<any>(null)
 
+    const adminTelegramId = tgUser?.id?.toString() || ''
+
     const fetchData = async () => {
-        if (!tgUser) return
+        if (!adminTelegramId) return
         if (activeTab === 'pending') {
-            const { data } = await supabase.rpc('get_pending_users', { _admin_telegram_id: tgUser.id })
+            const { data } = await supabase.rpc('get_pending_users', { _admin_telegram_id: adminTelegramId })
             setPending(data || [])
         } else if (activeTab === 'users') {
             const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
@@ -30,18 +32,17 @@ export default function AdminPage() {
             const { data } = await supabase.from('rides').select('*, customer:profiles!rides_customer_id_fkey(first_name,last_name), driver:profiles!rides_driver_id_fkey(first_name,last_name)').order('created_at', { ascending: false }).limit(50)
             setRides(data || [])
         } else if (activeTab === 'stats') {
-            const { data } = await supabase.rpc('get_admin_stats', { _admin_telegram_id: tgUser.id })
+            const { data } = await supabase.rpc('get_admin_stats', { _admin_telegram_id: adminTelegramId })
             setStats(data)
         }
     }
 
     useEffect(() => {
         fetchData()
-    }, [activeTab, tgUser])
+    }, [activeTab, adminTelegramId])
 
-    const approve = async (userId: number, status: boolean) => {
-        if (!tgUser) return
-        await supabase.rpc('approve_user', { _admin_telegram_id: tgUser.id, _user_telegram_id: userId, _status: status ? 'approved' : 'rejected' })
+    const approve = async (userTelegramId: string, status: boolean) => {
+        await supabase.rpc('approve_user', { _admin_telegram_id: adminTelegramId, _user_telegram_id: userTelegramId, _status: status ? 'approved' : 'rejected' })
         fetchData()
         setSelected(null)
     }
@@ -49,7 +50,7 @@ export default function AdminPage() {
     const viewDetails = async (user: any) => {
         setSelected(user)
         if (user.role === 'driver') {
-            const { data } = await supabase.rpc('get_driver_details_for_admin', { _admin_telegram_id: tgUser!.id, _profile_id: user.id })
+            const { data } = await supabase.rpc('get_driver_details_for_admin', { _admin_telegram_id: adminTelegramId, _profile_id: user.id })
             if (data) setDetails(data[0])
         }
     }

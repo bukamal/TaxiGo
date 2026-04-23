@@ -1,33 +1,35 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabaseClient'
+import { useTelegram } from '../context/TelegramContext'
+import { createSupabaseClient } from '../lib/supabaseClient'
 import { useLanguage } from '../context/LanguageContext'
 import { User, Phone, ArrowLeft, Loader2 } from 'lucide-react'
 
 export default function CustomerSignupPage() {
-    const { user, profile } = useAuth()
+    const { user: tgUser } = useTelegram()
     const navigate = useNavigate()
     const { t } = useLanguage()
     const [loading, setLoading] = useState(false)
     const [form, setForm] = useState({
-        firstName: profile?.first_name || user?.user_metadata?.first_name || '',
-        lastName: profile?.last_name || user?.user_metadata?.last_name || '',
-        phone: profile?.phone || ''
+        firstName: tgUser?.first_name || '',
+        lastName: tgUser?.last_name || '',
+        phone: ''
     })
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!user) return
+        if (!tgUser) return
         setLoading(true)
+        const supabase = createSupabaseClient(tgUser.id.toString())
         const { error } = await supabase.from('profiles').upsert({
-            id: user.id,
+            telegram_id: tgUser.id.toString(),
             first_name: form.firstName,
             last_name: form.lastName,
+            username: tgUser.username,
             phone: form.phone,
             role: 'customer',
             approval_status: 'pending'
-        }, { onConflict: 'id' })
+        }, { onConflict: 'telegram_id' })
         setLoading(false)
         if (error) alert('Error: ' + error.message)
         else navigate('/pending')

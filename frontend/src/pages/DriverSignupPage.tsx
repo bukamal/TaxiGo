@@ -1,20 +1,20 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabaseClient'
+import { useTelegram } from '../context/TelegramContext'
+import { createSupabaseClient } from '../lib/supabaseClient'
 import { useLanguage } from '../context/LanguageContext'
 import { User, Phone, FileText, Camera, ArrowLeft, Loader2, X } from 'lucide-react'
 
 export default function DriverSignupPage() {
-    const { user, profile } = useAuth()
+    const { user: tgUser } = useTelegram()
     const navigate = useNavigate()
     const { t } = useLanguage()
     const [loading, setLoading] = useState(false)
     const [uploading, setUploading] = useState<'license'|'id'|null>(null)
     const [form, setForm] = useState({
-        firstName: profile?.first_name || user?.user_metadata?.first_name || '',
-        lastName: profile?.last_name || user?.user_metadata?.last_name || '',
-        phone: profile?.phone || '',
+        firstName: tgUser?.first_name || '',
+        lastName: tgUser?.last_name || '',
+        phone: '',
         vehicleMake: '', vehicleModel: '', vehicleYear: '', vehiclePlate: '', vehicleColor: '', licenseNumber: '',
         licenseImageUrl: '', idCardImageUrl: ''
     })
@@ -22,8 +22,9 @@ export default function DriverSignupPage() {
     const licenseRef = useRef<HTMLInputElement>(null), idRef = useRef<HTMLInputElement>(null)
 
     const uploadImage = async (file:File, type:'license'|'id'): Promise<string|null> => {
-        if(!user) return null
-        const path = `${user.id}/${type}/${Date.now()}.${file.name.split('.').pop()}`
+        if(!tgUser) return null
+        const supabase = createSupabaseClient(tgUser.id.toString())
+        const path = `${tgUser.id}/${type}/${Date.now()}.${file.name.split('.').pop()}`
         setUploading(type)
         const { error } = await supabase.storage.from('documents').upload(path, file)
         if(error) { alert('Upload failed'); setUploading(null); return null }
@@ -39,13 +40,21 @@ export default function DriverSignupPage() {
     }
 
     const handleSubmit = async (e:React.FormEvent) => {
-        e.preventDefault(); if(!user) return; setLoading(true)
-        const { error: profileError } = await supabase.from('profiles').upsert({
-            id: user.id, first_name: form.firstName, last_name: form.lastName, phone: form.phone, role: 'driver', approval_status: 'pending'
-        }, { onConflict: 'id' })
+        e.preventDefault(); if(!tgUser) return; setLoading(true)
+        const supabase = createSupabaseClient(tgUser.id.toString())
+        const { data: profile, error: profileError } = await supabase.from('profiles').upsert({
+            telegram_id: tgUser.id.toString(),
+            first_name: form.firstName,
+            last_name: form.lastName,
+            username: tgUser.username,
+            phone: form.phone,
+            role: 'driver',
+            approval_status: 'pending'
+        }, { onConflict: 'telegram_id' }).select('id').single()
         if(profileError) { alert(profileError.message); setLoading(false); return }
         const { error: detailsError } = await supabase.from('driver_details').upsert({
-            profile_id: user.id, vehicle_make: form.vehicleMake, vehicle_model: form.vehicleModel, vehicle_year: parseInt(form.vehicleYear)||null,
+            profile_id: profile.id,
+            vehicle_make: form.vehicleMake, vehicle_model: form.vehicleModel, vehicle_year: parseInt(form.vehicleYear)||null,
             vehicle_plate: form.vehiclePlate, vehicle_color: form.vehicleColor, license_number: form.licenseNumber,
             license_image_url: form.licenseImageUrl, id_card_image_url: form.idCardImageUrl
         }, { onConflict: 'profile_id' })

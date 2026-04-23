@@ -5,25 +5,23 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing Supabase environment variables. Ensure VITE_SUPABASE_SERVICE_KEY is set in Vercel (not Sensitive).')
+    throw new Error('Missing Supabase environment variables.')
 }
 
-const customFetch = (telegramId?: number) => {
+const customFetch = (telegramId?: string) => {
     return (url: RequestInfo | URL, options?: RequestInit) => {
         const headers = new Headers(options?.headers)
         if (telegramId) {
-            headers.set('X-Telegram-Id', telegramId.toString())
+            headers.set('X-Telegram-Id', telegramId)
         }
         return fetch(url, { ...options, headers })
     }
 }
 
-export const createSupabaseClient = (telegramId?: number): SupabaseClient<Database> => {
+export const createSupabaseClient = (telegramId?: string): SupabaseClient<Database> => {
     return createClient<Database>(supabaseUrl, supabaseServiceKey, {
         auth: { persistSession: false },
-        global: {
-            fetch: customFetch(telegramId)
-        }
+        global: { fetch: customFetch(telegramId) }
     })
 }
 

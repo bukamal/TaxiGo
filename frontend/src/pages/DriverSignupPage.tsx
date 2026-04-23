@@ -1,20 +1,17 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTelegram } from '../context/TelegramContext'
 import { createSupabaseClient } from '../lib/supabaseClient'
 import { useLanguage } from '../context/LanguageContext'
 import { User, Phone, FileText, Camera, ArrowLeft, Loader2, X } from 'lucide-react'
 
 export default function DriverSignupPage() {
-    const { user: tgUser } = useTelegram()
     const navigate = useNavigate()
     const { t } = useLanguage()
+    const tempId = sessionStorage.getItem('temp_telegram_id') || ''
     const [loading, setLoading] = useState(false)
     const [uploading, setUploading] = useState<'license'|'id'|null>(null)
     const [form, setForm] = useState({
-        firstName: tgUser?.first_name || '',
-        lastName: tgUser?.last_name || '',
-        phone: '',
+        firstName: '', lastName: '', phone: '',
         vehicleMake: '', vehicleModel: '', vehicleYear: '', vehiclePlate: '', vehicleColor: '', licenseNumber: '',
         licenseImageUrl: '', idCardImageUrl: ''
     })
@@ -22,9 +19,9 @@ export default function DriverSignupPage() {
     const licenseRef = useRef<HTMLInputElement>(null), idRef = useRef<HTMLInputElement>(null)
 
     const uploadImage = async (file:File, type:'license'|'id'): Promise<string|null> => {
-        if(!tgUser) return null
-        const supabase = createSupabaseClient(tgUser.id.toString())
-        const path = `${tgUser.id}/${type}/${Date.now()}.${file.name.split('.').pop()}`
+        if(!tempId) return null
+        const supabase = createSupabaseClient(tempId)
+        const path = `${tempId}/${type}/${Date.now()}.${file.name.split('.').pop()}`
         setUploading(type)
         const { error } = await supabase.storage.from('documents').upload(path, file)
         if(error) { alert('Upload failed'); setUploading(null); return null }
@@ -40,13 +37,15 @@ export default function DriverSignupPage() {
     }
 
     const handleSubmit = async (e:React.FormEvent) => {
-        e.preventDefault(); if(!tgUser) return; setLoading(true)
-        const supabase = createSupabaseClient(tgUser.id.toString())
+        e.preventDefault()
+        if(!tempId) return alert('معرف تيليجرام غير موجود')
+        setLoading(true)
+        const supabase = createSupabaseClient(tempId)
         const { data: profile, error: profileError } = await supabase.from('profiles').upsert({
-            telegram_id: tgUser.id.toString(),
+            telegram_id: tempId,
             first_name: form.firstName,
             last_name: form.lastName,
-            username: tgUser.username,
+            username: null,
             phone: form.phone,
             role: 'driver',
             approval_status: 'pending'
@@ -60,7 +59,7 @@ export default function DriverSignupPage() {
         }, { onConflict: 'profile_id' })
         setLoading(false)
         if(detailsError) alert('Error: ' + detailsError.message)
-        else navigate('/pending')
+        else { sessionStorage.removeItem('temp_telegram_id'); navigate('/pending') }
     }
 
     return (

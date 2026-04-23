@@ -42,7 +42,6 @@ export default function RoleSelectionPage() {
             .maybeSingle()
         
         if (!existingAdmin) {
-            // إنشاء صف الأدمن تلقائياً
             await supabase.from('profiles').insert({
                 telegram_id: tgUser.id.toString(),
                 first_name: tgUser.first_name || 'Admin',
@@ -52,7 +51,6 @@ export default function RoleSelectionPage() {
                 approval_status: 'approved'
             })
         } else {
-            // تحديث الصف ليكون admin و approved
             await supabase.from('profiles').update({
                 role: 'admin',
                 approval_status: 'approved'
@@ -95,7 +93,6 @@ export default function RoleSelectionPage() {
                         </div>
                     </button>
 
-                    {/* زر الأدمن - يظهر فقط للأدمن */}
                     {isAdmin && (
                         <button
                             onClick={handleAdminLogin}

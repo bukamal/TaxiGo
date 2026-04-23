@@ -20,6 +20,7 @@ import AdminPage from './pages/AdminPage'
 import DriverVehiclePage from './pages/DriverVehiclePage'
 
 const ONBOARDING_KEY = 'taxigo_onboarding_completed'
+const ADMIN_ID_KEY = 'taxigo_admin_id'
 
 function AppContent() {
     const { user: tgUser } = useTelegram()
@@ -29,7 +30,10 @@ function AppContent() {
 
     useEffect(() => {
         const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
-        const telegramId = tgUser?.id?.toString()
+        // 1. التحقق من وجود معرف أدمن مخزن
+        const storedAdminId = localStorage.getItem(ADMIN_ID_KEY)
+        // 2. استخدام معرف تيليجرام الحقيقي أو المخزن
+        const telegramId = tgUser?.id?.toString() || storedAdminId
 
         if (!telegramId) {
             setAppState(seen ? 'choose_role' : 'onboarding')
@@ -50,8 +54,7 @@ function AppContent() {
             } else {
                 setProfile(data)
                 if (data.approval_status === 'approved') {
-                    // الأدمن سيتم توجيهه إلى choose_role ليرى زر "أنا الأدمن"
-                    setAppState('choose_role')
+                    setAppState('approved')
                 } else if (data.approval_status === 'pending') {
                     setAppState('pending')
                 } else {
@@ -69,9 +72,7 @@ function AppContent() {
         setAppState('choose_role')
     }
 
-    if (loading) {
-        return <div className="h-screen flex items-center justify-center">تاكسي جو 🚕</div>
-    }
+    if (loading) return <div className="h-screen flex items-center justify-center">تاكسي جو 🚕</div>
 
     return (
         <BrowserRouter>
@@ -88,7 +89,7 @@ function AppContent() {
 
                 {appState === 'approved' && (
                     <Route path="/" element={<Layout />}>
-                        <Route index element={profile?.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
+                        <Route index element={profile?.role === 'driver' ? <Navigate to="/driver" replace /> : profile?.role === 'admin' ? <Navigate to="/admin" replace /> : <HomePage />} />
                         <Route path="ride/:id" element={<RidePage />} />
                         <Route path="driver" element={<DriverDashboard />} />
                         <Route path="driver/vehicle" element={<DriverVehiclePage />} />
@@ -96,8 +97,6 @@ function AppContent() {
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 )}
-
-                {/* مسار الأدمن متاح دائمًا، مع حماية داخلية */}
                 <Route path="/admin" element={<AdminPage />} />
             </Routes>
         </BrowserRouter>

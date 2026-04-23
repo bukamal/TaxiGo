@@ -3,74 +3,52 @@ import { useNavigate } from 'react-router-dom'
 import { useTelegram } from '../context/TelegramContext'
 import { createSupabaseClient } from '../lib/supabaseClient'
 import { useLanguage } from '../context/LanguageContext'
-import { User, Car, Shield, AlertCircle } from 'lucide-react'
+import { User, Car, Shield, AlertCircle, LogOut } from 'lucide-react'
+
+const ADMIN_ID_KEY = 'taxigo_admin_id'
 
 export default function RoleSelectionPage() {
     const { user: tgUser } = useTelegram()
     const navigate = useNavigate()
     const { t } = useLanguage()
-    const [isAdmin, setIsAdmin] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [manualId, setManualId] = useState('')
-    const [showManual, setShowManual] = useState(false)
-
-    const checkAdminStatus = async (userId: string) => {
-        if (!userId) return false
-        const supabase = createSupabaseClient(userId)
-        const { data, error } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'admin_telegram_id')
-            .maybeSingle()
-        
-        if (error || !data?.value) return false
-        const adminId = String(data.value).replace(/"/g, '')
-        return adminId === userId
-    }
+    const [manualId, setManualId] = useState(localStorage.getItem(ADMIN_ID_KEY) || '')
+    const [isAdmin, setIsAdmin] = useState(false)
 
     useEffect(() => {
-        const userId = tgUser?.id?.toString()
-        if (!userId) {
-            setShowManual(true)
-            return
+        if (tgUser?.id) {
+            checkAdmin(tgUser.id.toString())
         }
-
-        checkAdminStatus(userId).then(result => {
-            setIsAdmin(result)
-            if (!result) setShowManual(true)
-        })
     }, [tgUser])
 
-    const handleAdminLogin = async (forcedId?: string) => {
-        const userId = forcedId || tgUser?.id?.toString()
+    const checkAdmin = async (userId: string) => {
+        const supabase = createSupabaseClient(userId)
+        const { data } = await supabase.from('app_settings').select('value').eq('key', 'admin_telegram_id').single()
+        if (data?.value && String(data.value).replace(/"/g, '') === userId) {
+            setIsAdmin(true)
+            // تخزين المعرف تلقائيًا
+            localStorage.setItem(ADMIN_ID_KEY, userId)
+        }
+    }
+
+    const handleAdminLogin = async (userId: string) => {
         if (!userId) return alert('الرجاء إدخال معرف تيليجرام')
-        
         setLoading(true)
-        const isAdminUser = await checkAdminStatus(userId)
+        // تخزين المعرف
+        localStorage.setItem(ADMIN_ID_KEY, userId)
         
-        if (!isAdminUser) {
-            setLoading(false)
-            return alert('❌ هذا المعرف ليس الأدمن!')
-        }
-
-        try {
-            const supabase = createSupabaseClient(userId)
-            await supabase.from('profiles').upsert({
-                telegram_id: userId,
-                first_name: tgUser?.first_name || 'Admin',
-                last_name: tgUser?.last_name || '',
-                username: tgUser?.username || null,
-                role: 'admin',
-                approval_status: 'approved'
-            }, { onConflict: 'telegram_id' })
-        } catch (e) {
-            alert('❌ خطأ في حفظ بيانات الأدمن: ' + e)
-            setLoading(false)
-            return
-        }
-
+        const supabase = createSupabaseClient(userId)
+        await supabase.from('profiles').upsert({
+            telegram_id: userId,
+            first_name: tgUser?.first_name || 'Admin',
+            last_name: tgUser?.last_name || '',
+            username: tgUser?.username || null,
+            role: 'admin',
+            approval_status: 'approved'
+        }, { onConflict: 'telegram_id' })
+        
         setLoading(false)
-        // استخدام window.location.href كحل جذري
+        // إعادة التحميل ليتم التعرف على المعرف في App.tsx
         window.location.href = '/admin'
     }
 
@@ -79,34 +57,6 @@ export default function RoleSelectionPage() {
             <div className="flex-1 flex flex-col justify-center">
                 <h1 className="text-3xl font-bold mb-2 dark:text-white">{t('role.title')}</h1>
                 <p className="text-gray-500 dark:text-gray-400 mb-8">{t('role.subtitle')}</p>
-
-                {showManual && (
-                    <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-700">
-                        <div className="flex items-center gap-2 mb-2">
-                            <AlertCircle className="w-5 h-5 text-yellow-600" />
-                            <span className="font-medium text-yellow-800 dark:text-yellow-200">لم يتم التعرف على حساب تيليجرام</span>
-                        </div>
-                        <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
-                            تأكد من فتح التطبيق من داخل بوت تيليجرام. إذا كنت أدمن، يمكنك إدخال معرفك يدوياً:
-                        </p>
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={manualId}
-                                onChange={(e) => setManualId(e.target.value)}
-                                placeholder="أدخل معرف تيليجرام (رقم)"
-                                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-yellow-300 dark:border-yellow-600 text-sm"
-                            />
-                            <button
-                                onClick={() => handleAdminLogin(manualId)}
-                                disabled={!manualId || loading}
-                                className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700 disabled:opacity-50"
-                            >
-                                دخول
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 <div className="space-y-4">
                     <button onClick={() => navigate('/signup/customer')} className="w-full p-6 border-2 border-gray-200 dark:border-gray-700 rounded-2xl flex items-center gap-4">
@@ -117,12 +67,30 @@ export default function RoleSelectionPage() {
                         <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center"><Car className="w-8 h-8 text-green-600 dark:text-green-400" /></div>
                         <div className="flex-1 text-left"><h2 className="text-xl font-semibold dark:text-white">{t('role.driver_title')}</h2><p className="text-gray-500 dark:text-gray-400 text-sm">{t('role.driver_desc')}</p></div>
                     </button>
-                    {isAdmin && !showManual && (
-                        <button onClick={() => handleAdminLogin()} disabled={loading} className="w-full p-6 border-2 border-purple-300 dark:border-purple-700 rounded-2xl flex items-center gap-4 bg-purple-50 dark:bg-purple-900/20">
-                            <div className="w-16 h-16 bg-purple-100 dark:bg-purple-800/50 rounded-2xl flex items-center justify-center"><Shield className="w-8 h-8 text-purple-600 dark:text-purple-400" /></div>
-                            <div className="flex-1 text-left"><h2 className="text-xl font-semibold dark:text-white">أنا الأدمن</h2><p className="text-gray-500 dark:text-gray-400 text-sm">الدخول إلى لوحة التحكم</p></div>
-                        </button>
-                    )}
+
+                    {/* قسم الأدمن - يظهر للجميع */}
+                    <div className="p-4 border-2 border-purple-200 dark:border-purple-800 rounded-2xl bg-purple-50 dark:bg-purple-900/20">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Shield className="w-6 h-6 text-purple-600" />
+                            <span className="font-semibold text-purple-800 dark:text-purple-200">دخول الأدمن</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={manualId}
+                                onChange={(e) => setManualId(e.target.value)}
+                                placeholder="أدخل معرف تيليجرام"
+                                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-purple-300 dark:border-purple-600 text-sm"
+                            />
+                            <button
+                                onClick={() => handleAdminLogin(manualId)}
+                                disabled={!manualId || loading}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+                            >
+                                دخول
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useTelegram } from './context/TelegramContext'
-import { useAppStore } from './store/useAppStore'
-import { createSupabaseClient } from './lib/supabaseClient'
 import { LanguageProvider } from './context/LanguageContext'
 import { ThemeProvider } from './context/ThemeContext'
 
@@ -23,58 +21,27 @@ const ONBOARDING_KEY = 'taxigo_onboarding_completed'
 
 function AppContent() {
     const { user: tgUser, isReady } = useTelegram()
-    const { setProfile, profile, setIsLoading } = useAppStore()
-    const [appState, setAppState] = useState<'loading' | 'onboarding' | 'choose_role' | 'signup_customer' | 'signup_driver' | 'pending' | 'approved'>('loading')
+    const [appState, setAppState] = useState<'loading' | 'onboarding' | 'choose_role' | 'approved' | 'pending'>('loading')
     const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null)
 
-    // تحميل تفضيل Onboarding من localStorage
     useEffect(() => {
+        console.log('🔍 App: isReady =', isReady, 'tgUser =', tgUser)
         const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
         setHasSeenOnboarding(seen)
     }, [])
 
-    // فحص حالة المستخدم بمجرد أن يصبح كل شيء جاهزًا
     useEffect(() => {
-        if (!isReady || hasSeenOnboarding === null) return
+        if (!isReady) return
+        console.log('🔍 App: hasSeenOnboarding =', hasSeenOnboarding)
 
-        const telegramId = tgUser?.id
-        // إذا لم يكن هناك معرف تيليجرام (متصفح عادي)، نوجه إلى onboarding
-        if (!telegramId) {
-            console.warn('No Telegram ID, treating as new user')
-            setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
-            setIsLoading(false)
-            return
+        // **تجاوز قاعدة البيانات مؤقتاً: الانتقال مباشرة إلى Onboarding أو Choose Role**
+        if (!hasSeenOnboarding) {
+            setAppState('onboarding')
+        } else {
+            // إذا كان قد شاهد Onboarding، ننتقل إلى Choose Role (للتجربة)
+            setAppState('choose_role')
         }
-
-        const checkUserStatus = async () => {
-            setIsLoading(true)
-            const supabase = createSupabaseClient(telegramId)
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('telegram_id', telegramId)
-                .maybeSingle()
-
-            if (error) {
-                console.error('Error fetching profile:', error)
-                setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
-            } else if (!data) {
-                setAppState(hasSeenOnboarding ? 'choose_role' : 'onboarding')
-            } else {
-                setProfile(data)
-                if (data.approval_status === 'approved') {
-                    setAppState('approved')
-                } else if (data.approval_status === 'pending') {
-                    setAppState('pending')
-                } else {
-                    setAppState('choose_role')
-                }
-            }
-            setIsLoading(false)
-        }
-
-        checkUserStatus()
-    }, [tgUser, isReady, hasSeenOnboarding])
+    }, [isReady, hasSeenOnboarding])
 
     const completeOnboarding = () => {
         localStorage.setItem(ONBOARDING_KEY, 'true')
@@ -82,14 +49,15 @@ function AppContent() {
         setAppState('choose_role')
     }
 
-    // عرض شاشة التحميل فقط عندما لا نعرف حالة onboarding بعد
     if (hasSeenOnboarding === null || appState === 'loading') {
         return (
             <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <p className="text-lg">تاكسي جو 🚕</p>
+                <p className="text-lg">تاكسي جو 🚕 (تحميل...)</p>
             </div>
         )
     }
+
+    console.log('🎯 App: rendering with appState =', appState)
 
     return (
         <BrowserRouter>
@@ -102,13 +70,9 @@ function AppContent() {
 
                 {appState === 'onboarding' && <Route path="*" element={<Navigate to="/onboarding" replace />} />}
                 {appState === 'choose_role' && <Route path="*" element={<Navigate to="/choose-role" replace />} />}
-                {appState === 'signup_customer' && <Route path="*" element={<Navigate to="/signup/customer" replace />} />}
-                {appState === 'signup_driver' && <Route path="*" element={<Navigate to="/signup/driver" replace />} />}
-                {appState === 'pending' && <Route path="*" element={<Navigate to="/pending" replace />} />}
-
                 {appState === 'approved' && (
                     <Route path="/" element={<Layout />}>
-                        <Route index element={profile?.role === 'driver' ? <Navigate to="/driver" replace /> : <HomePage />} />
+                        <Route index element={<HomePage />} />
                         <Route path="ride/:id" element={<RidePage />} />
                         <Route path="driver" element={<DriverDashboard />} />
                         <Route path="driver/vehicle" element={<DriverVehiclePage />} />
@@ -117,6 +81,7 @@ function AppContent() {
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 )}
+                {appState === 'pending' && <Route path="*" element={<Navigate to="/pending" replace />} />}
             </Routes>
         </BrowserRouter>
     )

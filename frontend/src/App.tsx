@@ -30,16 +30,17 @@ function AppContent() {
     useEffect(() => {
         const seen = localStorage.getItem(ONBOARDING_KEY) === 'true'
         const telegramId = tgUser?.id?.toString()
+        console.log('🟢 [App] tgUser:', tgUser, 'telegramId:', telegramId, 'seenOnboarding:', seen)
 
         if (!telegramId) {
-            // لا يوجد معرف تيليجرام (متصفح عادي) – اذهب إلى Onboarding مباشرة
+            console.log('🟡 [App] No telegramId, setting appState to', seen ? 'choose_role' : 'onboarding')
             setAppState(seen ? 'choose_role' : 'onboarding')
             setLoading(false)
             return
         }
 
-        // البحث عن المستخدم في Supabase
         const checkUser = async () => {
+            console.log('🔵 [App] Checking user with telegramId:', telegramId)
             const supabase = createSupabaseClient(telegramId)
             const { data, error } = await supabase
                 .from('profiles')
@@ -47,16 +48,22 @@ function AppContent() {
                 .eq('telegram_id', telegramId)
                 .maybeSingle()
 
+            console.log('🟣 [App] Supabase response:', { data, error })
+
             if (error || !data) {
-                // مستخدم جديد أو خطأ – ابدأ من Onboarding/اختيار الدور
+                console.log('🔴 [App] No user found or error')
                 setAppState(seen ? 'choose_role' : 'onboarding')
             } else {
+                console.log('🟢 [App] User found:', data)
                 setProfile(data)
                 if (data.approval_status === 'approved') {
+                    console.log('✅ [App] User approved, role:', data.role)
                     setAppState('approved')
                 } else if (data.approval_status === 'pending') {
+                    console.log('⏳ [App] User pending')
                     setAppState('pending')
                 } else {
+                    console.log('❓ [App] Unknown status')
                     setAppState('choose_role')
                 }
             }
@@ -72,12 +79,15 @@ function AppContent() {
     }
 
     if (loading) {
+        console.log('⏳ [App] Still loading...')
         return (
             <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <p className="text-lg">تاكسي جو 🚕</p>
+                <p className="text-lg">تاكسي جو 🚕 (تحميل...)</p>
             </div>
         )
     }
+
+    console.log('🎯 [App] Rendering with appState =', appState, 'profile:', profile)
 
     return (
         <BrowserRouter>

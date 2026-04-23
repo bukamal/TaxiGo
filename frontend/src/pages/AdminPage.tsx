@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTelegram } from './context/TelegramContext'
-import { createSupabaseClient } from './lib/supabaseClient'
-import { useLanguage } from './context/LanguageContext'
+import { useTelegram } from '../context/TelegramContext'
+import { createSupabaseClient } from '../lib/supabaseClient'
+import { useLanguage } from '../context/LanguageContext'
 import { CheckCircle, XCircle, User, Car, Eye, Users, FileText, Activity } from 'lucide-react'
 
 type Tab = 'pending' | 'users' | 'rides' | 'stats'

@@ -14,9 +14,10 @@ export default function RoleSelectionPage() {
 
     useEffect(() => {
         const userId = tgUser?.id?.toString()
-        console.log('🟢 [RoleSelection] userId:', userId)
-
-        if (!userId) return
+        if (!userId) {
+            alert('❌ لا يوجد معرف تيليجرام (tgUser = null)')
+            return
+        }
 
         const checkAdmin = async () => {
             try {
@@ -27,17 +28,22 @@ export default function RoleSelectionPage() {
                     .eq('key', 'admin_telegram_id')
                     .single()
 
-                if (error) return
+                if (error) {
+                    alert('❌ خطأ في جلب app_settings:\n' + error.message)
+                    return
+                }
 
-                // تحويل القيمة إلى نص (لأنها قد تكون رقماً في JSONB)
-                const adminId = String(data?.value || '').replace(/"/g, '')
-                console.log('🟡 Admin ID:', adminId, 'My ID:', userId)
+                const adminId = String(data?.value || '')
+                alert('🟢 معرفي: ' + userId + '\n🟢 معرف الأدمن في القاعدة: ' + adminId)
 
                 if (adminId === userId) {
                     setIsAdmin(true)
+                    alert('✅ أنا الأدمن! سيظهر الزر.')
+                } else {
+                    alert('❌ لست الأدمن. المعرفان مختلفان.')
                 }
             } catch (e) {
-                console.error(e)
+                alert('❌ استثناء:' + e)
             }
         }
 
@@ -50,27 +56,14 @@ export default function RoleSelectionPage() {
         setLoading(true)
         const supabase = createSupabaseClient(userId)
 
-        const { data: existingAdmin } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('telegram_id', userId)
-            .maybeSingle()
-
-        if (!existingAdmin) {
-            await supabase.from('profiles').insert({
-                telegram_id: userId,
-                first_name: tgUser?.first_name || 'Admin',
-                last_name: tgUser?.last_name || '',
-                username: tgUser?.username || null,
-                role: 'admin',
-                approval_status: 'approved'
-            })
-        } else {
-            await supabase.from('profiles').update({
-                role: 'admin',
-                approval_status: 'approved'
-            }).eq('telegram_id', userId)
-        }
+        await supabase.from('profiles').upsert({
+            telegram_id: userId,
+            first_name: tgUser?.first_name || 'Admin',
+            last_name: tgUser?.last_name || '',
+            username: tgUser?.username || null,
+            role: 'admin',
+            approval_status: 'approved'
+        }, { onConflict: 'telegram_id' })
 
         setLoading(false)
         navigate('/admin')
